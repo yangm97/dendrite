@@ -113,7 +113,7 @@ func (t *txnReq) processTransaction() (*gomatrixserverlib.RespSend, error) {
 
 type unknownRoomError string
 
-func (e unknownRoomError) Error() string { return fmt.Sprintf("unknown room %q", e) }
+func (e unknownRoomError) Error() string { return fmt.Sprintf("unknown room %q", string(e)) }
 
 func (t *txnReq) processEvent(e gomatrixserverlib.Event) error {
 	refs := e.PrevEvents()
