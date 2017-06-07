@@ -213,11 +213,38 @@
 			"path": "/ed25519"
 		},
 		{
+			"importpath": "golang.org/x/image",
+			"repository": "https://go.googlesource.com/image",
+			"revision": "426cfd8eeb6e08ab1932954e09e3c2cb2bc6e36d",
+			"branch": "master"
+		},
+		{
 			"importpath": "golang.org/x/net/context",
 			"repository": "https://go.googlesource.com/net",
 			"revision": "007e530097ad7f954752df63046b4036f98ba6a6",
 			"branch": "master",
 			"path": "/context"
+		},
+		{
+			"importpath": "golang.org/x/text/encoding",
+			"repository": "https://go.googlesource.com/text",
+			"revision": "ab6d1c143672de99b9dfde433b7f6affb278cc74",
+			"branch": "master",
+			"path": "/encoding"
+		},
+		{
+			"importpath": "golang.org/x/text/encoding/charmap",
+			"repository": "https://go.googlesource.com/text",
+			"revision": "ab6d1c143672de99b9dfde433b7f6affb278cc74",
+			"branch": "master",
+			"path": "/encoding/charmap"
+		},
+		{
+			"importpath": "golang.org/x/text/transform",
+			"repository": "https://go.googlesource.com/text",
+			"revision": "ab6d1c143672de99b9dfde433b7f6affb278cc74",
+			"branch": "master",
+			"path": "/transform"
 		},
 		{
 			"importpath": "gopkg.in/Shopify/sarama.v1",

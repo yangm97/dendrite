@@ -32,6 +32,12 @@ import (
 	"github.com/matrix-org/dendrite/mediaapi/storage"
 	"github.com/matrix-org/dendrite/mediaapi/types"
 	"github.com/nfnt/resize"
+	// Imported for bmp codec
+	_ "golang.org/x/image/bmp"
+	// Imported for tiff codec
+	_ "golang.org/x/image/tiff"
+	// Imported for webp codec
+	_ "golang.org/x/image/webp"
 )
 
 // GenerateThumbnails generates the configured thumbnail sizes for the source file
