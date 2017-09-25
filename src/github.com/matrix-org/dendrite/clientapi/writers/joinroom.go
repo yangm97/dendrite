@@ -272,6 +272,9 @@ func (r joinRoomReq) joinRoomUsingServers(
 // server was invalid this returns an error.
 // Otherwise this returns a JSONResponse.
 func (r joinRoomReq) joinRoomUsingServer(roomID string, server gomatrixserverlib.ServerName) (*util.JSONResponse, error) {
+	logger := util.GetLogger(r.req.Context())
+
+	logger.Debug("Doing make_join")
 	respMakeJoin, err := r.federation.MakeJoin(r.req.Context(), server, roomID, r.userID)
 	if err != nil {
 		// TODO: Check if the user was not allowed to join the room.
@@ -295,15 +298,18 @@ func (r joinRoomReq) joinRoomUsingServer(roomID string, server gomatrixserverlib
 		return &res, nil
 	}
 
+	logger.Debug("Doing send_join")
 	respSendJoin, err := r.federation.SendJoin(r.req.Context(), server, event)
 	if err != nil {
 		return nil, err
 	}
 
+	logger.Debug("Checking send_join response")
 	if err = respSendJoin.Check(r.req.Context(), r.keyRing, event); err != nil {
 		return nil, err
 	}
 
+	logger.Debug("Writing send_join response to room server")
 	if err = r.producer.SendEventWithState(
 		r.req.Context(), gomatrixserverlib.RespState(respSendJoin), event,
 	); err != nil {
