@@ -26,7 +26,7 @@ var (
 )
 
 func setupFlags(app *kingpin.Application) {
-	app.Flag("config", "Load JSON configuration from file.").Action(loadConfig).String()
+	app.Flag("config", "Load JSON configuration from file.").Envar("GOMETALINTER_CONFIG").Action(loadConfig).String()
 	app.Flag("disable", "Disable previously enabled linters.").PlaceHolder("LINTER").Short('D').Action(disableAction).Strings()
 	app.Flag("enable", "Enable previously disabled linters.").PlaceHolder("LINTER").Short('E').Action(enableAction).Strings()
 	app.Flag("linter", "Define a linter.").PlaceHolder("NAME:COMMAND:PATTERN").Action(cliLinterOverrides).StringMap()
@@ -156,8 +156,8 @@ func formatLinters() string {
 		if install == "()" {
 			install = ""
 		}
-		fmt.Fprintf(w, "  %s  %s\n        %s\n        %s\n",
-			linter.Name, install, linter.Command, linter.Pattern)
+		fmt.Fprintf(w, "  %s: %s\n\tcommand: %s\n\tregex: %s\n\tfast: %t\n\tdefault enabled: %t\n\n",
+			linter.Name, install, linter.Command, linter.Pattern, linter.IsFast, linter.defaultEnabled)
 	}
 	return w.String()
 }

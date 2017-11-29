@@ -10,7 +10,7 @@
 		{
 			"importpath": "github.com/alecthomas/gometalinter",
 			"repository": "https://github.com/alecthomas/gometalinter",
-			"revision": "0262fb20957a4c2d3bb7c834a6a125ae3884a2c6",
+			"revision": "212b1b91e362ea0b0e441c9b53ce31e81405c240",
 			"branch": "master"
 		},
 		{
