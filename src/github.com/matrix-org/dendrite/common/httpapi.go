@@ -21,6 +21,13 @@ func MakeAuthAPI(metricsName string, deviceDB auth.DeviceDatabase, f func(*http.
 		if resErr != nil {
 			return *resErr
 		}
+
+		span := opentracing.SpanFromContext(req.Context())
+		if span != nil {
+			span.SetTag("userID", device.UserID)
+			span.SetTag("deviceID", device.ID)
+		}
+
 		return f(req, device)
 	}
 	return MakeExternalAPI(metricsName, h)
@@ -29,15 +36,30 @@ func MakeAuthAPI(metricsName string, deviceDB auth.DeviceDatabase, f func(*http.
 // MakeExternalAPI turns a util.JSONRequestHandler function into an http.Handler.
 // This is used for APIs that are called from the internet.
 func MakeExternalAPI(metricsName string, f func(*http.Request) util.JSONResponse) http.Handler {
-	h := util.MakeJSONAPI(util.NewJSONRequestHandler(f))
-	withSpan := func(w http.ResponseWriter, req *http.Request) {
+	// After we've assigned a request ID we want to start an opentracing span
+	// with that tagged.
+	withSpan := func(req *http.Request) util.JSONResponse {
+		ctx := req.Context()
+		reqID := util.GetRequestID(ctx)
+
 		span := opentracing.StartSpan(metricsName)
+		span.SetTag("req.id", reqID)
+
 		defer span.Finish()
-		req = req.WithContext(opentracing.ContextWithSpan(req.Context(), span))
-		h.ServeHTTP(w, req)
+		req = req.WithContext(opentracing.ContextWithSpan(ctx, span))
+
+		// Actually do the request
+		response := f(req)
+
+		// Tag the span with status code
+		ext.HTTPStatusCode.Set(span, uint16(response.Code))
+
+		return response
 	}
 
-	return prometheus.InstrumentHandler(metricsName, http.HandlerFunc(withSpan))
+	h := util.MakeJSONAPI(util.NewJSONRequestHandler(withSpan))
+
+	return prometheus.InstrumentHandler(metricsName, h)
 }
 
 // MakeInternalAPI turns a util.JSONRequestHandler function into an http.Handler.
