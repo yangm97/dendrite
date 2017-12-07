@@ -36,11 +36,8 @@ func SetupFederationSenderComponent(
 
 	queues := queue.NewOutgoingQueues(base.Cfg.Matrix.ServerName, federation)
 
-	consumer := consumers.NewOutputRoomEventConsumer(
-		base.Cfg, base.KafkaConsumer, queues,
-		federationSenderDB, base.QueryAPI(),
+	handler := consumers.NewOutputRoomEventConsumer(
+		base.Cfg, queues, federationSenderDB, base.QueryAPI(),
 	)
-	if err = consumer.Start(); err != nil {
-		logrus.WithError(err).Panic("failed to start room server consumer")
-	}
+	base.StartRoomServerConsumer(federationSenderDB, handler)
 }

@@ -22,7 +22,6 @@ import (
 	"github.com/matrix-org/dendrite/clientapi/routing"
 	"github.com/matrix-org/dendrite/common/basecomponent"
 	"github.com/matrix-org/gomatrixserverlib"
-	"github.com/sirupsen/logrus"
 )
 
 // SetupClientAPIComponent sets up and registers HTTP handlers for the ClientAPI
@@ -46,12 +45,10 @@ func SetupClientAPIComponent(
 		Topic:    string(base.Cfg.Kafka.Topics.OutputClientData),
 	}
 
-	consumer := consumers.NewOutputRoomEventConsumer(
-		base.Cfg, base.KafkaConsumer, accountsDB, base.QueryAPI(),
+	handler := consumers.NewOutputRoomEventConsumer(
+		base.Cfg, accountsDB, base.QueryAPI(),
 	)
-	if err := consumer.Start(); err != nil {
-		logrus.WithError(err).Panicf("failed to start room server consumer")
-	}
+	base.StartRoomServerConsumer(accountsDB, handler)
 
 	routing.Setup(
 		base.APIMux, *base.Cfg, roomserverProducer,

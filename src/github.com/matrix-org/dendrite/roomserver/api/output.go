@@ -15,7 +15,12 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
+
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/sirupsen/logrus"
+	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
 // An OutputType is a type of roomserver output.
@@ -135,4 +140,45 @@ type OutputRetireInviteEvent struct {
 	// The "membership" of the user after retiring the invite. One of "join"
 	// "leave" or "ban".
 	Membership string
+}
+
+type ProcessOutputEventHandler interface {
+	ProcessNewRoomEvent(context.Context, *OutputNewRoomEvent) error
+	ProcessNewInviteEvent(context.Context, *OutputNewInviteEvent) error
+	ProcessRetireInviteEvent(context.Context, *OutputRetireInviteEvent) error
+}
+
+type ProcessOutputEvent struct {
+	handler ProcessOutputEventHandler
+}
+
+func NewProcessOutputEvent(handler ProcessOutputEventHandler) ProcessOutputEvent {
+	return ProcessOutputEvent{handler: handler}
+}
+
+// ProcessMessage implements common.ProcessKafkaMessage
+func (p *ProcessOutputEvent) ProcessMessage(
+	ctx context.Context, msg *sarama.ConsumerMessage,
+) error {
+	// Parse out the event JSON
+	var output OutputEvent
+	if err := json.Unmarshal(msg.Value, &output); err != nil {
+		// If the message was invalid, log it and move on to the next message in the stream
+		logrus.WithError(err).Errorf("roomserver output log: message parse failure")
+		return nil
+	}
+
+	switch output.Type {
+	case OutputTypeNewRoomEvent:
+		return p.handler.ProcessNewRoomEvent(ctx, output.NewRoomEvent)
+	case OutputTypeNewInviteEvent:
+		return p.handler.ProcessNewInviteEvent(ctx, output.NewInviteEvent)
+	case OutputTypeRetireInviteEvent:
+		return p.handler.ProcessRetireInviteEvent(ctx, output.RetireInviteEvent)
+	default:
+		logrus.WithField("type", output.Type).Debug(
+			"roomserver output log: ignoring unknown output type",
+		)
+		return nil
+	}
 }

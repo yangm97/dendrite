@@ -259,6 +259,44 @@ func (b *BaseDendrite) SetupAndServeHTTP(addr string) {
 	logrus.Infof("Stopped %s server on %s", b.componentName, addr)
 }
 
+// StartRoomServerConsumer starts handling OutputRoomEvent kafka topic with the
+// given handler
+func (b *BaseDendrite) StartRoomServerConsumer(
+	partitionStore common.PartitionStorer,
+	handler api.ProcessOutputEventHandler,
+) {
+	processor := api.NewProcessOutputEvent(handler)
+
+	consumer := common.NewContinualConsumer(
+		string(b.Cfg.Kafka.Topics.OutputRoomEvent),
+		b.KafkaConsumer,
+		partitionStore,
+		&processor,
+	)
+
+	if err := consumer.Start(); err != nil {
+		logrus.WithError(err).Panicf("failed to start room server consumer")
+	}
+}
+
+// StartClientDataConsumer starts handling OutputClientData kafka topic with the
+// given handler
+func (b *BaseDendrite) StartClientDataConsumer(
+	partitionStore common.PartitionStorer,
+	handler common.ProcessKafkaMessage,
+) {
+	consumer := common.NewContinualConsumer(
+		string(b.Cfg.Kafka.Topics.OutputClientData),
+		b.KafkaConsumer,
+		partitionStore,
+		handler,
+	)
+
+	if err := consumer.Start(); err != nil {
+		logrus.WithError(err).Panicf("failed to start client data consumer")
+	}
+}
+
 // setupKafka creates kafka consumer/producer pair from the config. Checks if
 // should use naffka.
 func setupKafka(cfg *config.Dendrite) (sarama.Consumer, sarama.SyncProducer) {

@@ -55,19 +55,15 @@ func SetupSyncAPIComponent(
 
 	requestPool := sync.NewRequestPool(syncDB, notifier, accountsDB)
 
-	roomConsumer := consumers.NewOutputRoomEventConsumer(
-		base.Cfg, base.KafkaConsumer, notifier, syncDB, base.QueryAPI(),
+	roomserverHandler := consumers.NewOutputRoomEventConsumer(
+		base.Cfg, notifier, syncDB, base.QueryAPI(),
 	)
-	if err = roomConsumer.Start(); err != nil {
-		logrus.WithError(err).Panicf("failed to start room server consumer")
-	}
+	base.StartRoomServerConsumer(syncDB, roomserverHandler)
 
-	clientConsumer := consumers.NewOutputClientDataConsumer(
-		base.Cfg, base.KafkaConsumer, notifier, syncDB,
+	clientHandler := consumers.NewOutputClientDataConsumer(
+		base.Cfg, notifier, syncDB,
 	)
-	if err = clientConsumer.Start(); err != nil {
-		logrus.WithError(err).Panicf("failed to start client data consumer")
-	}
+	base.StartClientDataConsumer(syncDB, clientHandler)
 
 	routing.Setup(base.APIMux, requestPool, syncDB, deviceDB)
 }

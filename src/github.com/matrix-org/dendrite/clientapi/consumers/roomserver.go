@@ -16,87 +16,55 @@ package consumers
 
 import (
 	"context"
-	"encoding/json"
 
 	"github.com/matrix-org/dendrite/clientapi/auth/storage/accounts"
-	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/common/config"
 	"github.com/matrix-org/dendrite/roomserver/api"
 	"github.com/matrix-org/gomatrixserverlib"
-
-	log "github.com/sirupsen/logrus"
-	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
 // OutputRoomEventConsumer consumes events that originated in the room server.
 type OutputRoomEventConsumer struct {
-	roomServerConsumer *common.ContinualConsumer
-	db                 *accounts.Database
-	query              api.RoomserverQueryAPI
-	serverName         string
+	db         *accounts.Database
+	query      api.RoomserverQueryAPI
+	serverName string
 }
 
-// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer. Call Start() to begin consuming from room servers.
+// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer.
 func NewOutputRoomEventConsumer(
 	cfg *config.Dendrite,
-	kafkaConsumer sarama.Consumer,
 	store *accounts.Database,
 	queryAPI api.RoomserverQueryAPI,
 ) *OutputRoomEventConsumer {
 
-	consumer := common.ContinualConsumer{
-		Topic:          string(cfg.Kafka.Topics.OutputRoomEvent),
-		Consumer:       kafkaConsumer,
-		PartitionStore: store,
-	}
 	s := &OutputRoomEventConsumer{
-		roomServerConsumer: &consumer,
-		db:                 store,
-		query:              queryAPI,
-		serverName:         string(cfg.Matrix.ServerName),
+		db:         store,
+		query:      queryAPI,
+		serverName: string(cfg.Matrix.ServerName),
 	}
-	consumer.ProcessMessage = s.onMessage
 
 	return s
 }
 
-// Start consuming from room servers
-func (s *OutputRoomEventConsumer) Start() error {
-	return s.roomServerConsumer.Start()
-}
-
-// onMessage is called when the sync server receives a new event from the room server output log.
-// It is not safe for this function to be called from multiple goroutines, or else the
-// sync stream position may race and be incorrectly calculated.
-func (s *OutputRoomEventConsumer) onMessage(msg *sarama.ConsumerMessage) error {
-	// Parse out the event JSON
-	var output api.OutputEvent
-	if err := json.Unmarshal(msg.Value, &output); err != nil {
-		// If the message was invalid, log it and move on to the next message in the stream
-		log.WithError(err).Errorf("roomserver output log: message parse failure")
-		return nil
-	}
-
-	if output.Type != api.OutputTypeNewRoomEvent {
-		log.WithField("type", output.Type).Debug(
-			"roomserver output log: ignoring unknown output type",
-		)
-		return nil
-	}
-
-	ev := output.NewRoomEvent.Event
-	log.WithFields(log.Fields{
-		"event_id": ev.EventID(),
-		"room_id":  ev.RoomID(),
-		"type":     ev.Type(),
-	}).Info("received event from roomserver")
-
-	events, err := s.lookupStateEvents(output.NewRoomEvent.AddsStateEventIDs, ev)
+// ProcessNewRoomEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessNewRoomEvent(ctx context.Context, event *api.OutputNewRoomEvent) error {
+	ev := event.Event
+	events, err := s.lookupStateEvents(event.AddsStateEventIDs, ev)
 	if err != nil {
 		return err
 	}
 
-	return s.db.UpdateMemberships(context.TODO(), events, output.NewRoomEvent.RemovesStateEventIDs)
+	return s.db.UpdateMemberships(ctx, events, event.RemovesStateEventIDs)
+}
+
+// ProcessNewInviteEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessNewInviteEvent(ctx context.Context, event *api.OutputNewInviteEvent) error {
+	return nil
+}
+
+// ProcessNewInviteEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessRetireInviteEvent(ctx context.Context, event *api.OutputRetireInviteEvent) error {
+	return nil
 }
 
 // lookupStateEvents looks up the state events that are added by a new event.

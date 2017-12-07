@@ -16,10 +16,8 @@ package consumers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/common/config"
 	"github.com/matrix-org/dendrite/roomserver/api"
 	"github.com/matrix-org/dendrite/syncapi/storage"
@@ -27,76 +25,34 @@ import (
 	"github.com/matrix-org/dendrite/syncapi/types"
 	"github.com/matrix-org/gomatrixserverlib"
 	log "github.com/sirupsen/logrus"
-	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
 // OutputRoomEventConsumer consumes events that originated in the room server.
 type OutputRoomEventConsumer struct {
-	roomServerConsumer *common.ContinualConsumer
-	db                 *storage.SyncServerDatabase
-	notifier           *sync.Notifier
-	query              api.RoomserverQueryAPI
+	db       *storage.SyncServerDatabase
+	notifier *sync.Notifier
+	query    api.RoomserverQueryAPI
 }
 
-// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer. Call Start() to begin consuming from room servers.
+// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer.
 func NewOutputRoomEventConsumer(
 	cfg *config.Dendrite,
-	kafkaConsumer sarama.Consumer,
 	n *sync.Notifier,
 	store *storage.SyncServerDatabase,
 	queryAPI api.RoomserverQueryAPI,
 ) *OutputRoomEventConsumer {
-
-	consumer := common.ContinualConsumer{
-		Topic:          string(cfg.Kafka.Topics.OutputRoomEvent),
-		Consumer:       kafkaConsumer,
-		PartitionStore: store,
-	}
 	s := &OutputRoomEventConsumer{
-		roomServerConsumer: &consumer,
-		db:                 store,
-		notifier:           n,
-		query:              queryAPI,
+		db:       store,
+		notifier: n,
+		query:    queryAPI,
 	}
-	consumer.ProcessMessage = s.onMessage
 
 	return s
 }
 
-// Start consuming from room servers
-func (s *OutputRoomEventConsumer) Start() error {
-	return s.roomServerConsumer.Start()
-}
-
-// onMessage is called when the sync server receives a new event from the room server output log.
-// It is not safe for this function to be called from multiple goroutines, or else the
-// sync stream position may race and be incorrectly calculated.
-func (s *OutputRoomEventConsumer) onMessage(msg *sarama.ConsumerMessage) error {
-	// Parse out the event JSON
-	var output api.OutputEvent
-	if err := json.Unmarshal(msg.Value, &output); err != nil {
-		// If the message was invalid, log it and move on to the next message in the stream
-		log.WithError(err).Errorf("roomserver output log: message parse failure")
-		return nil
-	}
-
-	switch output.Type {
-	case api.OutputTypeNewRoomEvent:
-		return s.onNewRoomEvent(context.TODO(), *output.NewRoomEvent)
-	case api.OutputTypeNewInviteEvent:
-		return s.onNewInviteEvent(context.TODO(), *output.NewInviteEvent)
-	case api.OutputTypeRetireInviteEvent:
-		return s.onRetireInviteEvent(context.TODO(), *output.RetireInviteEvent)
-	default:
-		log.WithField("type", output.Type).Debug(
-			"roomserver output log: ignoring unknown output type",
-		)
-		return nil
-	}
-}
-
-func (s *OutputRoomEventConsumer) onNewRoomEvent(
-	ctx context.Context, msg api.OutputNewRoomEvent,
+// ProcessNewRoomEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessNewRoomEvent(
+	ctx context.Context, msg *api.OutputNewRoomEvent,
 ) error {
 	ev := msg.Event
 	log.WithFields(log.Fields{
@@ -153,8 +109,9 @@ func (s *OutputRoomEventConsumer) onNewRoomEvent(
 	return nil
 }
 
-func (s *OutputRoomEventConsumer) onNewInviteEvent(
-	ctx context.Context, msg api.OutputNewInviteEvent,
+// ProcessNewInviteEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessNewInviteEvent(
+	ctx context.Context, msg *api.OutputNewInviteEvent,
 ) error {
 	syncStreamPos, err := s.db.AddInviteEvent(ctx, msg.Event)
 	if err != nil {
@@ -169,8 +126,9 @@ func (s *OutputRoomEventConsumer) onNewInviteEvent(
 	return nil
 }
 
-func (s *OutputRoomEventConsumer) onRetireInviteEvent(
-	ctx context.Context, msg api.OutputRetireInviteEvent,
+// ProcessRetireInviteEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessRetireInviteEvent(
+	ctx context.Context, msg *api.OutputRetireInviteEvent,
 ) error {
 	err := s.db.RetireInviteEvent(ctx, msg.EventID)
 	if err != nil {

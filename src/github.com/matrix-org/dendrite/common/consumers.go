@@ -42,23 +42,34 @@ type PartitionStorer interface {
 type ContinualConsumer struct {
 	// The kafkaesque topic to consume events from.
 	// This is the name used in kafka to identify the stream to consume events from.
-	Topic string
+	topic string
 	// A kafkaesque stream consumer providing the APIs for talking to the event source.
 	// The interface is taken from a client library for Apache Kafka.
 	// But any equivalent event streaming protocol could be made to implement the same interface.
-	Consumer sarama.Consumer
+	consumer sarama.Consumer
 	// A thing which can load and save partition offsets for a topic.
-	PartitionStore PartitionStorer
+	partitionStore PartitionStorer
 	// ProcessMessage is a function which will be called for each message in the log. Return an error to
 	// stop processing messages. See ErrShutdown for specific control signals.
-	ProcessMessage func(msg *sarama.ConsumerMessage) error
-	// ShutdownCallback is called when ProcessMessage returns ErrShutdown, after the partition has been saved.
-	// It is optional.
-	ShutdownCallback func()
+	handler ProcessKafkaMessage
 }
 
 // ErrShutdown can be returned from ContinualConsumer.ProcessMessage to stop the ContinualConsumer.
 var ErrShutdown = fmt.Errorf("shutdown")
+
+func NewContinualConsumer(
+	topic string,
+	consumer sarama.Consumer,
+	partitionStore PartitionStorer,
+	handler ProcessKafkaMessage,
+) ContinualConsumer {
+	return ContinualConsumer{
+		topic:          topic,
+		consumer:       consumer,
+		partitionStore: partitionStore,
+		handler:        handler,
+	}
+}
 
 // Start starts the consumer consuming.
 // Starts up a goroutine for each partition in the kafka stream.
@@ -67,7 +78,7 @@ var ErrShutdown = fmt.Errorf("shutdown")
 func (c *ContinualConsumer) Start() error {
 	offsets := map[int32]int64{}
 
-	partitions, err := c.Consumer.Partitions(c.Topic)
+	partitions, err := c.consumer.Partitions(c.topic)
 	if err != nil {
 		return err
 	}
@@ -76,7 +87,7 @@ func (c *ContinualConsumer) Start() error {
 		offsets[partition] = sarama.OffsetOldest
 	}
 
-	storedOffsets, err := c.PartitionStore.PartitionOffsets(context.TODO(), c.Topic)
+	storedOffsets, err := c.partitionStore.PartitionOffsets(context.TODO(), c.topic)
 	if err != nil {
 		return err
 	}
@@ -89,7 +100,7 @@ func (c *ContinualConsumer) Start() error {
 
 	var partitionConsumers []sarama.PartitionConsumer
 	for partition, offset := range offsets {
-		pc, err := c.Consumer.ConsumePartition(c.Topic, partition, offset)
+		pc, err := c.consumer.ConsumePartition(c.topic, partition, offset)
 		if err != nil {
 			for _, p := range partitionConsumers {
 				p.Close() // nolint: errcheck
@@ -109,17 +120,18 @@ func (c *ContinualConsumer) Start() error {
 func (c *ContinualConsumer) consumePartition(pc sarama.PartitionConsumer) {
 	defer pc.Close() // nolint: errcheck
 	for message := range pc.Messages() {
-		msgErr := c.ProcessMessage(message)
+		msgErr := c.handler.ProcessMessage(context.TODO(), message)
 		// Advance our position in the stream so that we will start at the right position after a restart.
-		if err := c.PartitionStore.SetPartitionOffset(context.TODO(), c.Topic, message.Partition, message.Offset); err != nil {
+		if err := c.partitionStore.SetPartitionOffset(context.TODO(), c.topic, message.Partition, message.Offset); err != nil {
 			panic(fmt.Errorf("the ContinualConsumer failed to SetPartitionOffset: %s", err))
 		}
 		// Shutdown if we were told to do so.
 		if msgErr == ErrShutdown {
-			if c.ShutdownCallback != nil {
-				c.ShutdownCallback()
-			}
 			return
 		}
 	}
+}
+
+type ProcessKafkaMessage interface {
+	ProcessMessage(ctx context.Context, msg *sarama.ConsumerMessage) error
 }

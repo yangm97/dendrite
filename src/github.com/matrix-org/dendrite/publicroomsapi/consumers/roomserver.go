@@ -16,82 +16,43 @@ package consumers
 
 import (
 	"context"
-	"encoding/json"
 
-	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/common/config"
 	"github.com/matrix-org/dendrite/publicroomsapi/storage"
 	"github.com/matrix-org/dendrite/roomserver/api"
 	log "github.com/sirupsen/logrus"
-	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
 // OutputRoomEventConsumer consumes events that originated in the room server.
 type OutputRoomEventConsumer struct {
-	roomServerConsumer *common.ContinualConsumer
-	db                 *storage.PublicRoomsServerDatabase
-	query              api.RoomserverQueryAPI
+	db    *storage.PublicRoomsServerDatabase
+	query api.RoomserverQueryAPI
 }
 
-// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer. Call Start() to begin consuming from room servers.
+// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer.
 func NewOutputRoomEventConsumer(
 	cfg *config.Dendrite,
-	kafkaConsumer sarama.Consumer,
 	store *storage.PublicRoomsServerDatabase,
 	queryAPI api.RoomserverQueryAPI,
 ) *OutputRoomEventConsumer {
-	consumer := common.ContinualConsumer{
-		Topic:          string(cfg.Kafka.Topics.OutputRoomEvent),
-		Consumer:       kafkaConsumer,
-		PartitionStore: store,
-	}
 	s := &OutputRoomEventConsumer{
-		roomServerConsumer: &consumer,
-		db:                 store,
-		query:              queryAPI,
+		db:    store,
+		query: queryAPI,
 	}
-	consumer.ProcessMessage = s.onMessage
 
 	return s
 }
 
-// Start consuming from room servers
-func (s *OutputRoomEventConsumer) Start() error {
-	return s.roomServerConsumer.Start()
-}
-
-// onMessage is called when the sync server receives a new event from the room server output log.
-func (s *OutputRoomEventConsumer) onMessage(msg *sarama.ConsumerMessage) error {
-	// Parse out the event JSON
-	var output api.OutputEvent
-	if err := json.Unmarshal(msg.Value, &output); err != nil {
-		// If the message was invalid, log it and move on to the next message in the stream
-		log.WithError(err).Errorf("roomserver output log: message parse failure")
-		return nil
-	}
-
-	if output.Type != api.OutputTypeNewRoomEvent {
-		log.WithField("type", output.Type).Debug(
-			"roomserver output log: ignoring unknown output type",
-		)
-		return nil
-	}
-
-	ev := output.NewRoomEvent.Event
-	log.WithFields(log.Fields{
-		"event_id": ev.EventID(),
-		"room_id":  ev.RoomID(),
-		"type":     ev.Type(),
-	}).Info("received event from roomserver")
-
-	addQueryReq := api.QueryEventsByIDRequest{EventIDs: output.NewRoomEvent.AddsStateEventIDs}
+// ProcessNewRoomEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessNewRoomEvent(ctx context.Context, event *api.OutputNewRoomEvent) error {
+	addQueryReq := api.QueryEventsByIDRequest{EventIDs: event.AddsStateEventIDs}
 	var addQueryRes api.QueryEventsByIDResponse
 	if err := s.query.QueryEventsByID(context.TODO(), &addQueryReq, &addQueryRes); err != nil {
 		log.Warn(err)
 		return err
 	}
 
-	remQueryReq := api.QueryEventsByIDRequest{EventIDs: output.NewRoomEvent.RemovesStateEventIDs}
+	remQueryReq := api.QueryEventsByIDRequest{EventIDs: event.RemovesStateEventIDs}
 	var remQueryRes api.QueryEventsByIDResponse
 	if err := s.query.QueryEventsByID(context.TODO(), &remQueryReq, &remQueryRes); err != nil {
 		log.Warn(err)
@@ -99,4 +60,14 @@ func (s *OutputRoomEventConsumer) onMessage(msg *sarama.ConsumerMessage) error {
 	}
 
 	return s.db.UpdateRoomFromEvents(context.TODO(), addQueryRes.Events, remQueryRes.Events)
+}
+
+// ProcessNewInviteEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessNewInviteEvent(ctx context.Context, event *api.OutputNewInviteEvent) error {
+	return nil
+}
+
+// ProcessRetireInviteEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessRetireInviteEvent(ctx context.Context, event *api.OutputRetireInviteEvent) error {
+	return nil
 }

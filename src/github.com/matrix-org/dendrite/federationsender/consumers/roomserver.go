@@ -16,10 +16,8 @@ package consumers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/common/config"
 	"github.com/matrix-org/dendrite/federationsender/queue"
 	"github.com/matrix-org/dendrite/federationsender/storage"
@@ -27,88 +25,58 @@ import (
 	"github.com/matrix-org/dendrite/roomserver/api"
 	"github.com/matrix-org/gomatrixserverlib"
 	log "github.com/sirupsen/logrus"
-	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
 // OutputRoomEventConsumer consumes events that originated in the room server.
 type OutputRoomEventConsumer struct {
-	roomServerConsumer *common.ContinualConsumer
-	db                 *storage.Database
-	queues             *queue.OutgoingQueues
-	query              api.RoomserverQueryAPI
+	db     *storage.Database
+	queues *queue.OutgoingQueues
+	query  api.RoomserverQueryAPI
 }
 
 // NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer. Call Start() to begin consuming from room servers.
 func NewOutputRoomEventConsumer(
 	cfg *config.Dendrite,
-	kafkaConsumer sarama.Consumer,
 	queues *queue.OutgoingQueues,
 	store *storage.Database,
 	queryAPI api.RoomserverQueryAPI,
 ) *OutputRoomEventConsumer {
-	consumer := common.ContinualConsumer{
-		Topic:          string(cfg.Kafka.Topics.OutputRoomEvent),
-		Consumer:       kafkaConsumer,
-		PartitionStore: store,
-	}
 	s := &OutputRoomEventConsumer{
-		roomServerConsumer: &consumer,
-		db:                 store,
-		queues:             queues,
-		query:              queryAPI,
+		db:     store,
+		queues: queues,
+		query:  queryAPI,
 	}
-	consumer.ProcessMessage = s.onMessage
 
 	return s
 }
 
-// Start consuming from room servers
-func (s *OutputRoomEventConsumer) Start() error {
-	return s.roomServerConsumer.Start()
-}
-
-// onMessage is called when the federation server receives a new event from the room server output log.
-// It is unsafe to call this with messages for the same room in multiple gorountines
-// because updates it will likely fail with a types.EventIDMismatchError when it
-// realises that it cannot update the room state using the deltas.
-func (s *OutputRoomEventConsumer) onMessage(msg *sarama.ConsumerMessage) error {
-	// Parse out the event JSON
-	var output api.OutputEvent
-	if err := json.Unmarshal(msg.Value, &output); err != nil {
-		// If the message was invalid, log it and move on to the next message in the stream
-		log.WithError(err).Errorf("roomserver output log: message parse failure")
-		return nil
-	}
-	if output.Type != api.OutputTypeNewRoomEvent {
-		log.WithField("type", output.Type).Debug(
-			"roomserver output log: ignoring unknown output type",
-		)
-		return nil
-	}
-	ev := &output.NewRoomEvent.Event
-	log.WithFields(log.Fields{
-		"event_id":       ev.EventID(),
-		"room_id":        ev.RoomID(),
-		"send_as_server": output.NewRoomEvent.SendAsServer,
-	}).Info("received event from roomserver")
-
-	if err := s.processMessage(*output.NewRoomEvent); err != nil {
+// ProcessNewRoomEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessNewRoomEvent(ctx context.Context, ore *api.OutputNewRoomEvent) error {
+	if err := s.processMessage(ctx, ore); err != nil {
 		// panic rather than continue with an inconsistent database
 		log.WithFields(log.Fields{
-			"event":      string(ev.JSON()),
-			log.ErrorKey: err,
-			"add":        output.NewRoomEvent.AddsStateEventIDs,
-			"del":        output.NewRoomEvent.RemovesStateEventIDs,
-		}).Panicf("roomserver output log: write event failure")
-		return nil
+			"event": string(ore.Event.EventID()),
+			"add":   ore.AddsStateEventIDs,
+			"del":   ore.RemovesStateEventIDs,
+		}).WithError(err).Panicf("roomserver output log: write event failure")
 	}
 
 	return nil
 }
 
+// ProcessNewInviteEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessNewInviteEvent(ctx context.Context, event *api.OutputNewInviteEvent) error {
+	return nil
+}
+
+// ProcessRetireInviteEvent implements output.ProcessOutputEventHandler
+func (s *OutputRoomEventConsumer) ProcessRetireInviteEvent(ctx context.Context, event *api.OutputRetireInviteEvent) error {
+	return nil
+}
+
 // processMessage updates the list of currently joined hosts in the room
 // and then sends the event to the hosts that were joined before the event.
-func (s *OutputRoomEventConsumer) processMessage(ore api.OutputNewRoomEvent) error {
+func (s *OutputRoomEventConsumer) processMessage(ctx context.Context, ore *api.OutputNewRoomEvent) error {
 	addsStateEvents, err := s.lookupStateEvents(ore.AddsStateEventIDs, ore.Event)
 	if err != nil {
 		return err
@@ -169,7 +137,7 @@ func (s *OutputRoomEventConsumer) processMessage(ore api.OutputNewRoomEvent) err
 // events from the room server.
 // Returns an error if there was a problem talking to the room server.
 func (s *OutputRoomEventConsumer) joinedHostsAtEvent(
-	ore api.OutputNewRoomEvent, oldJoinedHosts []types.JoinedHost,
+	ore *api.OutputNewRoomEvent, oldJoinedHosts []types.JoinedHost,
 ) ([]gomatrixserverlib.ServerName, error) {
 	// Combine the delta into a single delta so that the adds and removes can
 	// cancel each other out. This should reduce the number of times we need
