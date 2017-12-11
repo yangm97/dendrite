@@ -165,6 +165,9 @@ type Dendrite struct {
 		// The PublicRoomsAPI database stores information used to compute the public
 		// room directory. It is only accessed by the PublicRoomsAPI server.
 		PublicRoomsAPI DataSource `yaml:"public_rooms_api"`
+		// The PaginationAPI database stores information used to fulfill
+		// pagination requests.
+		PaginationAPI DataSource `yaml:"pagination_api"`
 		// The Naffka database is used internally by the naffka library, if used.
 		Naffka DataSource `yaml:"naffka,omitempty"`
 	} `yaml:"database"`

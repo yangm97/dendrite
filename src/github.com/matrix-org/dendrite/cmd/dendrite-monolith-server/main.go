@@ -19,6 +19,7 @@ import (
 	"net/http"
 
 	"github.com/matrix-org/dendrite/common/keydb"
+	"github.com/matrix-org/dendrite/paginationapi"
 
 	"github.com/matrix-org/dendrite/clientapi"
 	"github.com/matrix-org/dendrite/common"
@@ -56,6 +57,7 @@ func main() {
 	publicroomsapi.SetupPublicRoomsAPIComponent(base, deviceDB)
 	roomserver.SetupRoomServerComponentWithDB(base, roomserverDB)
 	syncapi.SetupSyncAPIComponent(base, deviceDB, accountDB)
+	paginationapi.SetupPaginationAPIComponent(base, deviceDB)
 
 	httpHandler := common.WrapHandlerInCORS(base.APIMux)
 
