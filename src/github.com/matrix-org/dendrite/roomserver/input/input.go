@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/opentracing/opentracing-go"
+
 	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/roomserver/api"
 	"github.com/matrix-org/util"
@@ -36,18 +38,20 @@ type RoomserverInputAPI struct {
 }
 
 // WriteOutputEvents implements OutputRoomEventWriter
-func (r *RoomserverInputAPI) WriteOutputEvents(roomID string, updates []api.OutputEvent) error {
+func (r *RoomserverInputAPI) WriteOutputEvents(ctx context.Context, roomID string, updates []api.OutputEvent) error {
 	messages := make([]*sarama.ProducerMessage, len(updates))
 	for i := range updates {
 		value, err := json.Marshal(updates[i])
 		if err != nil {
 			return err
 		}
-		messages[i] = &sarama.ProducerMessage{
+		msg := &sarama.ProducerMessage{
 			Topic: r.OutputRoomEventTopic,
 			Key:   sarama.StringEncoder(roomID),
 			Value: sarama.ByteEncoder(value),
 		}
+		common.SerialiseOpentracingSpan(opentracing.GlobalTracer(), ctx, msg)
+		messages[i] = msg
 	}
 	return r.Producer.SendMessages(messages)
 }

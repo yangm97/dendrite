@@ -29,6 +29,8 @@ func SetupFederationSenderComponent(
 	base *basecomponent.BaseDendrite,
 	federation *gomatrixserverlib.FederationClient,
 ) {
+	tracer := base.CreateNewTracer("FederationSender")
+
 	federationSenderDB, err := storage.NewDatabase(string(base.Cfg.Database.FederationSender))
 	if err != nil {
 		logrus.WithError(err).Panic("failed to connect to federation sender db")
@@ -39,5 +41,5 @@ func SetupFederationSenderComponent(
 	handler := consumers.NewOutputRoomEventConsumer(
 		base.Cfg, queues, federationSenderDB, base.QueryAPI(),
 	)
-	base.StartRoomServerConsumer(federationSenderDB, handler)
+	base.StartRoomServerConsumer(tracer, federationSenderDB, handler)
 }

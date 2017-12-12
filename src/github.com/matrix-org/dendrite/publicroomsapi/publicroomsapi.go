@@ -29,6 +29,8 @@ func SetupPublicRoomsAPIComponent(
 	base *basecomponent.BaseDendrite,
 	deviceDB *devices.Database,
 ) {
+	tracer := base.CreateNewTracer("PublicRoomsAPI")
+
 	publicRoomsDB, err := storage.NewPublicRoomsServerDatabase(string(base.Cfg.Database.PublicRoomsAPI))
 	if err != nil {
 		logrus.WithError(err).Panicf("failed to connect to public rooms db")
@@ -37,7 +39,7 @@ func SetupPublicRoomsAPIComponent(
 	handler := consumers.NewOutputRoomEventConsumer(
 		base.Cfg, publicRoomsDB, base.QueryAPI(),
 	)
-	base.StartRoomServerConsumer(publicRoomsDB, handler)
+	base.StartRoomServerConsumer(tracer, publicRoomsDB, handler)
 
 	routing.Setup(base.APIMux, deviceDB, publicRoomsDB)
 }

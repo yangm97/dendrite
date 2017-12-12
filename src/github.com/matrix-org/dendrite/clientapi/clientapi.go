@@ -33,6 +33,8 @@ func SetupClientAPIComponent(
 	federation *gomatrixserverlib.FederationClient,
 	keyRing *gomatrixserverlib.KeyRing,
 ) {
+	tracer := base.CreateNewTracer("ClientAPI")
+
 	roomserverProducer := producers.NewRoomserverProducer(base.InputAPI())
 
 	userUpdateProducer := &producers.UserUpdateProducer{
@@ -48,7 +50,7 @@ func SetupClientAPIComponent(
 	handler := consumers.NewOutputRoomEventConsumer(
 		base.Cfg, accountsDB, base.QueryAPI(),
 	)
-	base.StartRoomServerConsumer(accountsDB, handler)
+	base.StartRoomServerConsumer(tracer, accountsDB, handler)
 
 	routing.Setup(
 		base.APIMux, *base.Cfg, roomserverProducer,

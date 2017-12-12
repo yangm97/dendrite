@@ -66,7 +66,7 @@ type RoomEventDatabase interface {
 // OutputRoomEventWriter has the APIs needed to write an event to the output logs.
 type OutputRoomEventWriter interface {
 	// Write a list of events for a room
-	WriteOutputEvents(roomID string, updates []api.OutputEvent) error
+	WriteOutputEvents(ctx context.Context, roomID string, updates []api.OutputEvent) error
 }
 
 func processRoomEvent(
@@ -188,7 +188,7 @@ func processInviteEvent(
 		return err
 	}
 
-	if err = ow.WriteOutputEvents(roomID, outputUpdates); err != nil {
+	if err = ow.WriteOutputEvents(ctx, roomID, outputUpdates); err != nil {
 		return err
 	}
 

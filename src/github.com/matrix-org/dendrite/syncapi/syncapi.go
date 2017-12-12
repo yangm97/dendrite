@@ -37,6 +37,8 @@ func SetupSyncAPIComponent(
 	deviceDB *devices.Database,
 	accountsDB *accounts.Database,
 ) {
+	tracer := base.CreateNewTracer("SyncAPI")
+
 	syncDB, err := storage.NewSyncServerDatabase(string(base.Cfg.Database.SyncAPI))
 	if err != nil {
 		logrus.WithError(err).Panicf("failed to connect to sync db")
@@ -58,12 +60,12 @@ func SetupSyncAPIComponent(
 	roomserverHandler := consumers.NewOutputRoomEventConsumer(
 		base.Cfg, notifier, syncDB, base.QueryAPI(),
 	)
-	base.StartRoomServerConsumer(syncDB, roomserverHandler)
+	base.StartRoomServerConsumer(tracer, syncDB, roomserverHandler)
 
 	clientHandler := consumers.NewOutputClientDataConsumer(
 		base.Cfg, notifier, syncDB,
 	)
-	base.StartClientDataConsumer(syncDB, clientHandler)
+	base.StartClientDataConsumer(tracer, syncDB, clientHandler)
 
 	routing.Setup(base.APIMux, requestPool, syncDB, deviceDB)
 }

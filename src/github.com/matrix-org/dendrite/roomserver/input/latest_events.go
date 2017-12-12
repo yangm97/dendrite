@@ -157,7 +157,7 @@ func (u *latestEventsUpdater) doUpdateLatestEvents() error {
 	// send the event asynchronously but we would need to ensure that 1) the events are written to the log in
 	// the correct order, 2) that pending writes are resent across restarts. In order to avoid writing all the
 	// necessary bookkeeping we'll keep the event sending synchronous for now.
-	if err = u.ow.WriteOutputEvents(u.event.RoomID(), updates); err != nil {
+	if err = u.ow.WriteOutputEvents(u.ctx, u.event.RoomID(), updates); err != nil {
 		return err
 	}
 

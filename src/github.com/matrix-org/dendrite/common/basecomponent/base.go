@@ -281,6 +281,7 @@ func (b *BaseDendrite) SetupAndServeHTTP(addr string) {
 // StartRoomServerConsumer starts handling OutputRoomEvent kafka topic with the
 // given handler
 func (b *BaseDendrite) StartRoomServerConsumer(
+	tracer opentracing.Tracer,
 	partitionStore common.PartitionStorer,
 	handler api.ProcessOutputEventHandler,
 ) {
@@ -291,6 +292,7 @@ func (b *BaseDendrite) StartRoomServerConsumer(
 		b.KafkaConsumer,
 		partitionStore,
 		&processor,
+		tracer,
 	)
 
 	if err := consumer.Start(); err != nil {
@@ -301,6 +303,7 @@ func (b *BaseDendrite) StartRoomServerConsumer(
 // StartClientDataConsumer starts handling OutputClientData kafka topic with the
 // given handler
 func (b *BaseDendrite) StartClientDataConsumer(
+	tracer opentracing.Tracer,
 	partitionStore common.PartitionStorer,
 	handler common.ProcessKafkaMessage,
 ) {
@@ -309,6 +312,7 @@ func (b *BaseDendrite) StartClientDataConsumer(
 		b.KafkaConsumer,
 		partitionStore,
 		handler,
+		tracer,
 	)
 
 	if err := consumer.Start(); err != nil {
