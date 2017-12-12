@@ -428,7 +428,7 @@
 		{
 			"importpath": "gopkg.in/Shopify/sarama.v1",
 			"repository": "https://gopkg.in/Shopify/sarama.v1",
-			"revision": "0fb560e5f7fbcaee2f75e3c34174320709f69944",
+			"revision": "3b1b38866a79f06deddf0487d5c27ba0697ccd65",
 			"branch": "master"
 		},
 		{
