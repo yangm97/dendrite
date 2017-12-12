@@ -27,6 +27,7 @@ import (
 
 	"github.com/matrix-org/dendrite/clientapi/auth/authtypes"
 	"github.com/matrix-org/gomatrixserverlib"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ed25519"
 	"gopkg.in/yaml.v2"
@@ -538,6 +539,15 @@ func (config *Dendrite) RoomServerURL() string {
 // SetupTracing configures the opentracing using the supplied configuration.
 func (config *Dendrite) SetupTracing(serviceName string) (closer io.Closer, err error) {
 	return config.Tracing.Jaeger.InitGlobalTracer(
+		serviceName,
+		jaegerconfig.Logger(logrusLogger{logrus.StandardLogger()}),
+		jaegerconfig.Metrics(jaegermetrics.NullFactory),
+	)
+}
+
+// CreateNewTracer creates a new Tracer with given service name.
+func (config *Dendrite) CreateNewTracer(serviceName string) (opentracing.Tracer, io.Closer, error) {
+	return config.Tracing.Jaeger.New(
 		serviceName,
 		jaegerconfig.Logger(logrusLogger{logrus.StandardLogger()}),
 		jaegerconfig.Metrics(jaegermetrics.NullFactory),

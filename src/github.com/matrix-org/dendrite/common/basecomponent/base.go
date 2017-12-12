@@ -24,6 +24,7 @@ import (
 	"github.com/matrix-org/dendrite/common/keydb"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/naffka"
+	opentracing "github.com/opentracing/opentracing-go"
 
 	"github.com/matrix-org/dendrite/clientapi/auth/storage/accounts"
 	"github.com/matrix-org/dendrite/clientapi/auth/storage/devices"
@@ -44,6 +45,11 @@ import (
 
 var configPath = flag.String("config", "dendrite.yaml", "The path to the config file. For more information, see the config file in this repository.")
 
+type CloserInstance struct {
+	closer io.Closer
+	name   string
+}
+
 // BaseDendrite is a base for creating new instances of dendrite. It parses
 // command line flags and config, and exposes methods for creating various
 // resources. All errors are handled by logging the exiting, so all methods
@@ -56,6 +62,7 @@ type BaseDendrite struct {
 	inputAPI      api.RoomserverInputAPI
 	aliasAPI      api.RoomserverAliasAPI
 	monolith      bool
+	closers       []CloserInstance
 
 	// APIMux should be used to register new public matrix api endpoints
 	APIMux        *mux.Router
@@ -138,6 +145,18 @@ func newBaseDendrite(componentName string, monolith bool) *BaseDendrite {
 
 // Close implements io.Closer
 func (b *BaseDendrite) Close() error {
+	closers := b.closers
+	b.closers = nil
+
+	for _, c := range closers {
+		err := c.closer.Close()
+		if err != nil {
+			logrus.WithError(err).WithField(
+				"name", c.name,
+			).Warn("Failed to close closer")
+		}
+	}
+
 	return b.tracerCloser.Close()
 }
 
@@ -295,6 +314,19 @@ func (b *BaseDendrite) StartClientDataConsumer(
 	if err := consumer.Start(); err != nil {
 		logrus.WithError(err).Panicf("failed to start client data consumer")
 	}
+}
+
+// CreateNewTracer creates a new tracer instance. Will get automaically closed
+// when BaseDendrite is.
+func (b *BaseDendrite) CreateNewTracer(name string) opentracing.Tracer {
+	tracer, closer, err := b.Cfg.CreateNewTracer(name)
+	if err != nil {
+		logrus.WithError(err).WithField("name", name).Panicf("failed to create tracer")
+	}
+
+	b.closers = append(b.closers, CloserInstance{closer: closer, name: name})
+
+	return tracer
 }
 
 // setupKafka creates kafka consumer/producer pair from the config. Checks if
