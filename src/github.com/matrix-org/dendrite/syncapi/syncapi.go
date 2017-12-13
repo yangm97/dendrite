@@ -39,7 +39,7 @@ func SetupSyncAPIComponent(
 ) {
 	tracer := base.CreateNewTracer("SyncAPI")
 
-	syncDB, err := storage.NewSyncServerDatabase(string(base.Cfg.Database.SyncAPI))
+	syncDB, err := storage.NewSyncServerDatabase(base, string(base.Cfg.Database.SyncAPI))
 	if err != nil {
 		logrus.WithError(err).Panicf("failed to connect to sync db")
 	}

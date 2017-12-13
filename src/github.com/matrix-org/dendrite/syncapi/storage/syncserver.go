@@ -54,10 +54,10 @@ type SyncServerDatabase struct {
 }
 
 // NewSyncServerDatabase creates a new sync server database
-func NewSyncServerDatabase(dataSourceName string) (*SyncServerDatabase, error) {
+func NewSyncServerDatabase(tracerFactory common.NewTracerFactory, dataSourceName string) (*SyncServerDatabase, error) {
 	var d SyncServerDatabase
 	var err error
-	if d.db, err = sql.Open("postgres", dataSourceName); err != nil {
+	if d.db, err = common.OpenPostgresWithTracing(tracerFactory, "sync", dataSourceName); err != nil {
 		return nil, err
 	}
 	if err = d.PartitionOffsetStatements.Prepare(d.db, "syncapi"); err != nil {
