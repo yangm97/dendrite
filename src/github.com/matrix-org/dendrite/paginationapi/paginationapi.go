@@ -18,6 +18,7 @@ import (
 	"github.com/matrix-org/dendrite/clientapi/auth/storage/devices"
 	"github.com/matrix-org/dendrite/common/basecomponent"
 	"github.com/matrix-org/dendrite/paginationapi/consumers"
+	"github.com/matrix-org/dendrite/paginationapi/routing"
 	"github.com/matrix-org/dendrite/paginationapi/storage"
 	"github.com/sirupsen/logrus"
 )
@@ -38,5 +39,5 @@ func SetupPaginationAPIComponent(
 	handler := consumers.NewOutputRoomEventConsumer(paginationDB)
 	base.StartRoomServerConsumer(tracer, paginationDB, handler)
 
-	// routing.Setup(base.APIMux, deviceDB, publicRoomsDB)
+	routing.Setup(base.APIMux, base.QueryAPI(), paginationDB)
 }

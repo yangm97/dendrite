@@ -297,6 +297,7 @@ func (d *SyncServerDatabase) CompleteSync(
 		stateEvents = removeDuplicates(stateEvents, recentEvents)
 		jr := types.NewJoinResponse()
 		jr.Timeline.Events = gomatrixserverlib.ToClientEvents(recentEvents, gomatrixserverlib.FormatSync)
+		jr.Timeline.PrevBatch = recentEvents[len(recentEvents)-1].EventID()
 		jr.Timeline.Limited = true
 		jr.State.Events = gomatrixserverlib.ToClientEvents(stateEvents, gomatrixserverlib.FormatSync)
 		res.Rooms.Join[roomID] = *jr
@@ -425,6 +426,7 @@ func (d *SyncServerDatabase) addRoomDeltaToResponse(
 		jr := types.NewJoinResponse()
 		jr.Timeline.Events = gomatrixserverlib.ToClientEvents(recentEvents, gomatrixserverlib.FormatSync)
 		jr.Timeline.Limited = false // TODO: if len(events) >= numRecents + 1 and then set limited:true
+		jr.Timeline.PrevBatch = recentEvents[len(recentEvents)-1].EventID()
 		jr.State.Events = gomatrixserverlib.ToClientEvents(delta.stateEvents, gomatrixserverlib.FormatSync)
 		res.Rooms.Join[delta.roomID] = *jr
 	case "leave":

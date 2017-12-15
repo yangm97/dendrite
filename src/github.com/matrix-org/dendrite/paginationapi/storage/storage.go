@@ -18,6 +18,8 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/sirupsen/logrus"
+
 	// Import the postgres database driver.
 	_ "github.com/lib/pq"
 	"github.com/matrix-org/dendrite/common"
@@ -47,8 +49,16 @@ func NewPaginationAPIDatabase(dataSourceName string) (*PaginationAPIDatabase, er
 	return &d, nil
 }
 
-func (s *PaginationAPIDatabase) Paginate(ctx context.Context, eventID string, limit uint) ([]string, error) {
-	return nil, nil
+func (s *PaginationAPIDatabase) Paginate(ctx context.Context, eventID string, limit int) ([]string, error) {
+	var eventIDs []string
+
+	err := common.WithTransaction(s.db, func(txn *sql.Tx) error {
+		var err error
+		eventIDs, err = s.eventBuckets.paginate(ctx, txn, eventID, limit)
+		return err
+	})
+
+	return eventIDs, err
 }
 
 func (s *PaginationAPIDatabase) AddEvent(ctx context.Context, event *gomatrixserverlib.Event) error {
@@ -82,6 +92,12 @@ func (s *PaginationAPIDatabase) AddEvent(ctx context.Context, event *gomatrixser
 		}
 
 		result := CalculateEventInsertion(minParentBucketID, maxChildBucketID, maxCurrentBucketID, true)
+
+		logrus.WithFields(logrus.Fields{
+			"behaviour": result.Behaviour,
+			"bucket_id": result.BucketID,
+			"event_id":  eventID,
+		}).Warn("Resutl")
 
 		switch result.Behaviour {
 		case AppendAfter:
