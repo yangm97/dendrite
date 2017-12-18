@@ -17,6 +17,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"sort"
 
 	// Import the postgres database driver.
 	_ "github.com/lib/pq"
@@ -664,6 +665,24 @@ func (d *Database) EventsFromIDs(ctx context.Context, eventIDs []string) ([]type
 	}
 
 	return d.Events(ctx, nids)
+}
+
+// UnsentEvents gets a list of events that have persisted but haven't yet been
+// confirmed sent down the kaffka stream. Events should be sent in order.
+func (d *Database) UnsentEvents(ctx context.Context) ([]types.Event, error) {
+	nids, err := d.statements.getUnsentEventNids(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	events, err := d.Events(ctx, nids)
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Slice(events, func(i, j int) bool { return events[i].EventNID < events[j].EventNID })
+
+	return events, nil
 }
 
 type transaction struct {

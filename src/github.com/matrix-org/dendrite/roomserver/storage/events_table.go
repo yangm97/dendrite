@@ -115,6 +115,9 @@ const bulkSelectEventNIDSQL = "" +
 const selectMaxEventDepthSQL = "" +
 	"SELECT COALESCE(MAX(depth) + 1, 0) FROM roomserver_events WHERE event_nid = ANY($1)"
 
+const selectUnsentEventsSQL = "" +
+	"SELECT event_nid FROM roomserver_events WHERE NOT sent_to_output"
+
 type eventStatements struct {
 	insertEventStmt                        *sql.Stmt
 	selectEventStmt                        *sql.Stmt
@@ -129,6 +132,7 @@ type eventStatements struct {
 	bulkSelectEventIDStmt                  *sql.Stmt
 	bulkSelectEventNIDStmt                 *sql.Stmt
 	selectMaxEventDepthStmt                *sql.Stmt
+	selectUnsentEventsStmt                 *sql.Stmt
 }
 
 func (s *eventStatements) prepare(db *sql.DB) (err error) {
@@ -151,6 +155,7 @@ func (s *eventStatements) prepare(db *sql.DB) (err error) {
 		{&s.bulkSelectEventIDStmt, bulkSelectEventIDSQL},
 		{&s.bulkSelectEventNIDStmt, bulkSelectEventNIDSQL},
 		{&s.selectMaxEventDepthStmt, selectMaxEventDepthSQL},
+		{&s.selectUnsentEventsStmt, selectUnsentEventsSQL},
 	}.prepare(db)
 }
 
@@ -407,4 +412,24 @@ func eventNIDsAsArray(eventNIDs []types.EventNID) pq.Int64Array {
 		nids[i] = int64(eventNIDs[i])
 	}
 	return nids
+}
+
+func (s *eventStatements) getUnsentEventNids(ctx context.Context) ([]types.EventNID, error) {
+	rows, err := s.selectUnsentEventsStmt.QueryContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close() // nolint: errcheck
+
+	var results []types.EventNID
+	for rows.Next() {
+		var eventNID int64
+		if err = rows.Scan(&eventNID); err != nil {
+			return nil, err
+		}
+
+		results = append(results, types.EventNID(eventNID))
+	}
+
+	return results, nil
 }
