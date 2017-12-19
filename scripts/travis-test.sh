@@ -40,6 +40,8 @@ function travis_end {
 }
 
 function kill_kafka {
+    echo "killing kafka"
+    set -x
     ./kafka/bin/kafka-server-stop.sh || true
     ./kafka/bin/zookeeper-server-stop.sh || true
 }
