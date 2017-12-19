@@ -42,6 +42,9 @@ function travis_end {
 function kill_kafka {
     echo "killing kafka"
     killall -v java
+    sleep 2
+    ps xf
+    date
 }
 
 if [ "${TEST_SUITE:-lint}" == "lint" ]; then
