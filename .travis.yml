@@ -1,11 +1,11 @@
 language: go
 go:
- - 1.8.x
+# - 1.8.x
  - 1.9.x
 
 env:
-- TEST_SUITE="lint"
-- TEST_SUITE="unit-test"
+#- TEST_SUITE="lint"
+#- TEST_SUITE="unit-test"
 - TEST_SUITE="integ-test"
 
 sudo: false
