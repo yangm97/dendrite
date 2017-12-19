@@ -66,6 +66,7 @@ func (r *RoomserverInputAPI) InputRoomEvents(
 	defer r.mutex.Unlock()
 	for i := range request.InputRoomEvents {
 		if err := processRoomEvent(ctx, r.DB, r, request.InputRoomEvents[i]); err != nil {
+			util.GetLogger(ctx).Warnf("ProcessRoomEvent returned %s", err)
 			return err
 		}
 	}
@@ -74,6 +75,7 @@ func (r *RoomserverInputAPI) InputRoomEvents(
 			return err
 		}
 	}
+	util.GetLogger(ctx).Info("InputRoomEvents done")
 	return nil
 }
 
