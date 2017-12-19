@@ -17,6 +17,7 @@ package input
 import (
 	"bytes"
 	"context"
+	"sync"
 
 	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/roomserver/api"
@@ -25,6 +26,44 @@ import (
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/util"
 )
+
+type sendValue struct {
+	finishedChan  chan<- struct{}
+	stateAtEvent  types.StateAtEvent
+	event         gomatrixserverlib.Event
+	sendAsServer  string
+	transactionID *api.TransactionID
+}
+
+type EventSender struct {
+	db           RoomEventDatabase
+	outputWriter OutputRoomEventWriter
+	sendingMutex sync.Mutex
+	sending      map[types.RoomNID][]sendValue
+}
+
+func (e *EventSender) send(
+	ctx context.Context,
+	roomNID types.RoomNID,
+	stateAtEvent types.StateAtEvent,
+	event gomatrixserverlib.Event,
+	sendAsServer string,
+	transactionID *api.TransactionID,
+) {
+	e.sendingMutex.Lock()
+	defer e.sendingMutex.Unlock()
+
+	finishedChan := make(chan struct{})
+	e.sending[roomNID] = append(e.sending[roomNID], sendValue{
+		finishedChan:  finishedChan,
+		stateAtEvent:  stateAtEvent,
+		event:         event,
+		sendAsServer:  sendAsServer,
+		transactionID: transactionID,
+	})
+
+	<-finishedChan
+}
 
 // updateLatestEvents updates the list of latest events for this room in the database and writes the
 // event to the output log.
