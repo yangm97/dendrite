@@ -98,8 +98,10 @@ func processRoomEvent(
 	logger.Info("Store event")
 	roomNID, stateAtEvent, err := db.StoreEvent(ctx, event, authEventNIDs)
 	if err != nil {
+		logger.Warnf("Store event failed: %s", err)
 		return err
 	}
+	logger.Info("Event stored")
 
 	if input.Kind == api.KindOutlier {
 		// For outliers we can stop after we've stored the event itself as it
