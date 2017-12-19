@@ -94,3 +94,7 @@ if [ "${TEST_SUITE:-integ-test}" == "integ-test" ]; then
         travis_end
     done
 fi
+
+date
+ps ax
+
