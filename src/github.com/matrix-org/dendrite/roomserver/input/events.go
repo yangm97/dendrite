@@ -23,6 +23,7 @@ import (
 	"github.com/matrix-org/dendrite/roomserver/state"
 	"github.com/matrix-org/dendrite/roomserver/types"
 	"github.com/matrix-org/gomatrixserverlib"
+	"github.com/matrix-org/util"
 )
 
 // A RoomEventDatabase has the storage APIs needed to store a room event.
@@ -80,16 +81,21 @@ func processRoomEvent(
 	ow OutputRoomEventWriter,
 	input api.InputRoomEvent,
 ) error {
+	logger := util.GetLogger(ctx)
+
+	logger.Info("Parsing event")
 	// Parse and validate the event JSON
 	event := input.Event
 
 	// Check that the event passes authentication checks and work out the numeric IDs for the auth events.
+	logger.Info("Check auth events")
 	authEventNIDs, err := checkAuthEvents(ctx, db, event, input.AuthEventIDs)
 	if err != nil {
 		return err
 	}
 
 	// Store the event
+	logger.Info("Store event")
 	roomNID, stateAtEvent, err := db.StoreEvent(ctx, event, authEventNIDs)
 	if err != nil {
 		return err
@@ -103,6 +109,7 @@ func processRoomEvent(
 	}
 
 	if stateAtEvent.BeforeStateSnapshotNID == 0 {
+		logger.Info("Calculate state")
 		// We haven't calculated a state for this event yet.
 		// Lets calculate one.
 		if input.HasState {
@@ -134,6 +141,7 @@ func processRoomEvent(
 	}
 
 	// Update the extremities of the event graph for the room
+	logger.Info("Update extremities")
 	return updateLatestEvents(ctx, db, ow, roomNID, stateAtEvent, event, input.SendAsServer, input.TransactionID)
 }
 
