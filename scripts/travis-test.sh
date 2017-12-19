@@ -6,7 +6,7 @@
 # which case only the linting, unit tests or integration tests will be run
 # respectively. If not specified or null all tests are run.
 
-set -eux
+set -eu
 
 # Tune the GC to use more memory to reduce the number of garbage collections
 export GOGC=400
