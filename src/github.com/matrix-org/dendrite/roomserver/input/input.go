@@ -69,7 +69,9 @@ func (r *RoomserverInputAPI) InputRoomEvents(
 			util.GetLogger(ctx).Warnf("ProcessRoomEvent returned %s", err)
 			return err
 		}
+		util.GetLogger(ctx).Infof("ProcessRoomEvent done (%i)", i)
 	}
+	util.GetLogger(ctx).Infof("ProcessRoomEvent done done")
 	for i := range request.InputInviteEvents {
 		if err := processInviteEvent(ctx, r.DB, r, request.InputInviteEvents[i]); err != nil {
 			return err
