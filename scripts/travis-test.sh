@@ -42,9 +42,13 @@ function travis_end {
 function kill_kafka {
     echo "killing kafka"
     killall -v java
-    sleep 2
-    ps xf
-    date
+
+    while `killall -v -0 java`; do
+        sleep 2
+        ps xf
+        date
+    done
+    echo "done"
 }
 
 if [ "${TEST_SUITE:-lint}" == "lint" ]; then
