@@ -41,14 +41,8 @@ function travis_end {
 
 function kill_kafka {
     echo "killing kafka"
-    killall -v java
-
-    while `killall -v -0 java`; do
-        sleep 2
-        ps xf
-        date
-    done
-    echo "done"
+    # sometimes kafka doesn't die on a SIGTERM so we SIGKILL it.
+    killall -9 -v java
 }
 
 if [ "${TEST_SUITE:-lint}" == "lint" ]; then
