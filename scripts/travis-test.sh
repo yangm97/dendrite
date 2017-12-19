@@ -41,9 +41,7 @@ function travis_end {
 
 function kill_kafka {
     echo "killing kafka"
-    set -x
-    ./kafka/bin/kafka-server-stop.sh || true
-    ./kafka/bin/zookeeper-server-stop.sh || true
+    killall -v java
 }
 
 if [ "${TEST_SUITE:-lint}" == "lint" ]; then
@@ -97,6 +95,4 @@ if [ "${TEST_SUITE:-integ-test}" == "integ-test" ]; then
     done
 fi
 
-date
-ps ax
 
