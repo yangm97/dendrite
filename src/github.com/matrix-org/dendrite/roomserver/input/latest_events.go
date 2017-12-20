@@ -17,7 +17,6 @@ package input
 import (
 	"bytes"
 	"context"
-	"sync"
 
 	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/roomserver/api"
@@ -27,8 +26,7 @@ import (
 	"github.com/matrix-org/util"
 )
 
-type sendValue struct {
-	finishedChan  chan<- struct{}
+type EventSenderValue struct {
 	stateAtEvent  types.StateAtEvent
 	event         gomatrixserverlib.Event
 	sendAsServer  string
@@ -38,31 +36,37 @@ type sendValue struct {
 type EventSender struct {
 	db           RoomEventDatabase
 	outputWriter OutputRoomEventWriter
-	sendingMutex sync.Mutex
-	sending      map[types.RoomNID][]sendValue
+	linearizer   common.Linearizer
 }
 
-func (e *EventSender) send(
+func (e *EventSender) Send(
 	ctx context.Context,
 	roomNID types.RoomNID,
 	stateAtEvent types.StateAtEvent,
 	event gomatrixserverlib.Event,
 	sendAsServer string,
 	transactionID *api.TransactionID,
-) {
-	e.sendingMutex.Lock()
-	defer e.sendingMutex.Unlock()
-
-	finishedChan := make(chan struct{})
-	e.sending[roomNID] = append(e.sending[roomNID], sendValue{
-		finishedChan:  finishedChan,
-		stateAtEvent:  stateAtEvent,
-		event:         event,
-		sendAsServer:  sendAsServer,
-		transactionID: transactionID,
+) (err error) {
+	e.linearizer.Await(event.RoomID(), func() {
+		err = updateLatestEvents(ctx, e.db, e.outputWriter, roomNID, stateAtEvent, event, sendAsServer, transactionID)
 	})
 
-	<-finishedChan
+	return
+}
+
+func (e *EventSender) SendMany(
+	ctx context.Context,
+	roomNID types.RoomNID,
+	events []EventSenderValue,
+) (err error) {
+	e.linearizer.Await(event.RoomID(), func() {
+		for i := range events {
+			err = updateLatestEvents(ctx, e.db, e.outputWriter, roomNID, stateAtEvent, event, sendAsServer, transactionID)
+			if err != nil {
+				return
+			}
+		}
+	})
 }
 
 // updateLatestEvents updates the list of latest events for this room in the database and writes the
