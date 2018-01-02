@@ -57,16 +57,19 @@ func (e *EventSender) Send(
 func (e *EventSender) SendMany(
 	ctx context.Context,
 	roomNID types.RoomNID,
+	roomID string,
 	events []EventSenderValue,
 ) (err error) {
-	e.linearizer.Await(event.RoomID(), func() {
+	e.linearizer.Await(roomID, func() {
 		for i := range events {
-			err = updateLatestEvents(ctx, e.db, e.outputWriter, roomNID, stateAtEvent, event, sendAsServer, transactionID)
+			err = updateLatestEvents(ctx, e.db, e.outputWriter, roomNID, events[i].stateAtEvent, events[i].event, events[i].sendAsServer, events[i].transactionID)
 			if err != nil {
 				return
 			}
 		}
 	})
+
+	return
 }
 
 // updateLatestEvents updates the list of latest events for this room in the database and writes the
