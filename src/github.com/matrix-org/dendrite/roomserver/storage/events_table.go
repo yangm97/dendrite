@@ -19,6 +19,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/matrix-org/dendrite/roomserver/api"
+
 	"github.com/lib/pq"
 	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/roomserver/types"
@@ -42,7 +44,7 @@ CREATE TABLE IF NOT EXISTS roomserver_events (
     -- This is 0 if the event is not a state event.
     event_state_key_nid BIGINT NOT NULL,
     -- Whether the event has been written to the output log.
-    sent_to_output BOOLEAN NOT NULL DEFAULT FALSE,
+	sent_to_output BOOLEAN NOT NULL DEFAULT FALSE,
     -- Local numeric ID for the state at the event.
     -- This is 0 if we don't know the state at the event.
     -- If the state is not 0 then this event is part of the contiguous
@@ -61,13 +63,20 @@ CREATE TABLE IF NOT EXISTS roomserver_events (
     -- Needed for setting reference hashes when sending new events.
     reference_sha256 BYTEA NOT NULL,
     -- A list of numeric IDs for events that can authenticate this event.
-    auth_event_nids BIGINT[] NOT NULL
+	auth_event_nids BIGINT[] NOT NULL,
+	-- Whether to send this event over federation as the given server, empty
+	-- if it shouldn't be sent.
+	send_as_server TEXT NOT NULL,
+	-- Senders device, if local
+	device_id TEXT,
+	-- The transaction ID the client used to send the event, if a local event.
+	transaction_id TEXT
 );
 `
 
 const insertEventSQL = "" +
-	"INSERT INTO roomserver_events (room_nid, event_type_nid, event_state_key_nid, event_id, reference_sha256, auth_event_nids, depth)" +
-	" VALUES ($1, $2, $3, $4, $5, $6, $7)" +
+	"INSERT INTO roomserver_events (room_nid, event_type_nid, event_state_key_nid, event_id, reference_sha256, auth_event_nids, depth, send_as_server, device_id, transaction_id)" +
+	" VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)" +
 	" ON CONFLICT ON CONSTRAINT roomserver_event_id_unique" +
 	" DO NOTHING" +
 	" RETURNING event_nid, state_snapshot_nid"
@@ -116,7 +125,7 @@ const selectMaxEventDepthSQL = "" +
 	"SELECT COALESCE(MAX(depth) + 1, 0) FROM roomserver_events WHERE event_nid = ANY($1)"
 
 const selectUnsentEventsSQL = "" +
-	"SELECT event_nid FROM roomserver_events WHERE NOT sent_to_output"
+	"SELECT event_nid, event_id, room_nid, send_as_server, device_id, transaction_id FROM roomserver_events WHERE NOT sent_to_output"
 
 type eventStatements struct {
 	insertEventStmt                        *sql.Stmt
@@ -168,12 +177,15 @@ func (s *eventStatements) insertEvent(
 	referenceSHA256 []byte,
 	authEventNIDs []types.EventNID,
 	depth int64,
+	sendAsServer string,
+	transactionID *api.TransactionID,
 ) (types.EventNID, types.StateSnapshotNID, error) {
 	var eventNID int64
 	var stateNID int64
 	err := s.insertEventStmt.QueryRowContext(
 		ctx, int64(roomNID), int64(eventTypeNID), int64(eventStateKeyNID),
 		eventID, referenceSHA256, eventNIDsAsArray(authEventNIDs), depth,
+		sendAsServer, transactionID.DeviceID, transactionID.TransactionID,
 	).Scan(&eventNID, &stateNID)
 	return types.EventNID(eventNID), types.StateSnapshotNID(stateNID), err
 }
@@ -414,22 +426,55 @@ func eventNIDsAsArray(eventNIDs []types.EventNID) pq.Int64Array {
 	return nids
 }
 
-func (s *eventStatements) getUnsentEventNids(ctx context.Context) ([]types.EventNID, error) {
+func (s *eventStatements) getUnsentEventNids(ctx context.Context) (results []struct {
+	eventNID     types.EventNID
+	eventID      string
+	roomNID      types.RoomNID
+	sendAsServer string
+	txnID        *api.TransactionID
+}, err error) {
 	rows, err := s.selectUnsentEventsStmt.QueryContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close() // nolint: errcheck
 
-	var results []types.EventNID
 	for rows.Next() {
-		var eventNID int64
-		if err = rows.Scan(&eventNID); err != nil {
+		var (
+			eventNID      int64
+			eventID       string
+			roomNID       int64
+			sendAsServer  string
+			deviceID      sql.NullString
+			transactionID sql.NullString
+		)
+		if err = rows.Scan(&eventNID, &eventID, &sendAsServer, &deviceID, &transactionID); err != nil {
 			return nil, err
 		}
 
-		results = append(results, types.EventNID(eventNID))
+		var tID *api.TransactionID
+		if deviceID.Valid && transactionID.Valid {
+			tID = &api.TransactionID{
+				DeviceID:      deviceID.String,
+				TransactionID: transactionID.String,
+			}
+		}
+
+		results = append(results, struct {
+			eventNID types.EventNID
+
+			eventID      string
+			roomNID      types.RoomNID
+			sendAsServer string
+			txnID        *api.TransactionID
+		}{
+			eventNID:     types.EventNID(eventNID),
+			eventID:      eventID,
+			roomNID:      types.RoomNID(roomNID),
+			sendAsServer: sendAsServer,
+			txnID:        tID,
+		})
 	}
 
-	return results, nil
+	return
 }

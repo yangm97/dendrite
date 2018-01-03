@@ -21,6 +21,7 @@ import (
 
 	// Import the postgres database driver.
 	_ "github.com/lib/pq"
+	"github.com/matrix-org/dendrite/roomserver/api"
 	"github.com/matrix-org/dendrite/roomserver/types"
 	"github.com/matrix-org/gomatrixserverlib"
 )
@@ -47,6 +48,7 @@ func Open(dataSourceName string) (*Database, error) {
 // StoreEvent implements input.EventDatabase
 func (d *Database) StoreEvent(
 	ctx context.Context, event gomatrixserverlib.Event, authEventNIDs []types.EventNID,
+	sendAsServer string, transactionID *api.TransactionID,
 ) (types.RoomNID, types.StateAtEvent, error) {
 	var (
 		roomNID          types.RoomNID
@@ -83,6 +85,8 @@ func (d *Database) StoreEvent(
 		event.EventReference().EventSHA256,
 		authEventNIDs,
 		event.Depth(),
+		sendAsServer,
+		transactionID,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			// We've already inserted the event so select the numeric event ID
@@ -667,12 +671,20 @@ func (d *Database) EventsFromIDs(ctx context.Context, eventIDs []string) ([]type
 	return d.Events(ctx, nids)
 }
 
-// UnsentEvents gets a list of events that have persisted but haven't yet been
-// confirmed sent down the kaffka stream. Events should be sent in order.
-func (d *Database) UnsentEvents(ctx context.Context) ([]types.Event, error) {
-	nids, err := d.statements.getUnsentEventNids(ctx)
+// UnsentEvents implements input.RoomEventDatabase
+func (d *Database) UnsentEvents(ctx context.Context) ([]types.EventForSending, error) {
+	entries, err := d.statements.getUnsentEventNids(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].eventNID < entries[j].eventNID })
+
+	nids := make([]types.EventNID, 0, len(entries))
+	ids := make([]string, 0, len(entries))
+	for i := range entries {
+		nids = append(nids, entries[i].eventNID)
+		ids = append(ids, entries[i].eventID)
 	}
 
 	events, err := d.Events(ctx, nids)
@@ -680,9 +692,23 @@ func (d *Database) UnsentEvents(ctx context.Context) ([]types.Event, error) {
 		return nil, err
 	}
 
-	sort.Slice(events, func(i, j int) bool { return events[i].EventNID < events[j].EventNID })
+	state, err := d.StateAtEventIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 
-	return events, nil
+	results := make([]types.EventForSending, len(entries))
+	for i := range entries {
+		results[i] = types.EventForSending{
+			Event:         events[i],
+			SendAsServer:  entries[i].sendAsServer,
+			TransactionID: entries[i].txnID,
+			StateAtEvent:  state[i],
+			RoomNID:       entries[i].roomNID,
+		}
+	}
+
+	return results, nil
 }
 
 type transaction struct {

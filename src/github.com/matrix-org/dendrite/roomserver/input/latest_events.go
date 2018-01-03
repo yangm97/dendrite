@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/pkg/errors"
+
 	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/roomserver/api"
 	"github.com/matrix-org/dendrite/roomserver/state"
@@ -34,9 +36,9 @@ type EventSenderValue struct {
 }
 
 type EventSender struct {
-	db           RoomEventDatabase
-	outputWriter OutputRoomEventWriter
-	linearizer   common.Linearizer
+	DB           RoomEventDatabase
+	OutputWriter OutputRoomEventWriter
+	Linearizer   common.Linearizer
 }
 
 func (e *EventSender) Send(
@@ -47,27 +49,41 @@ func (e *EventSender) Send(
 	sendAsServer string,
 	transactionID *api.TransactionID,
 ) (err error) {
-	e.linearizer.Await(event.RoomID(), func() {
-		err = updateLatestEvents(ctx, e.db, e.outputWriter, roomNID, stateAtEvent, event, sendAsServer, transactionID)
+	e.Linearizer.Await(event.RoomID(), func() {
+		err = updateLatestEvents(ctx, e.DB, e.OutputWriter, roomNID, stateAtEvent, event, sendAsServer, transactionID)
 	})
 
 	return
 }
 
-func (e *EventSender) SendMany(
-	ctx context.Context,
-	roomNID types.RoomNID,
-	roomID string,
-	events []EventSenderValue,
-) (err error) {
-	e.linearizer.Await(roomID, func() {
-		for i := range events {
-			err = updateLatestEvents(ctx, e.db, e.outputWriter, roomNID, events[i].stateAtEvent, events[i].event, events[i].sendAsServer, events[i].transactionID)
-			if err != nil {
-				return
+func (e *EventSender) Start(ctx context.Context) (err error) {
+	entries, err := e.DB.UnsentEvents(ctx)
+	if err != nil {
+		return errors.WithMessage(err, "failed to get unsent events from DB")
+	}
+
+	var eventToRoomMap = make(map[types.RoomNID][]types.EventForSending)
+	for i := range entries {
+		roomNID := entries[i].RoomNID
+		eventToRoomMap[roomNID] = append(eventToRoomMap[roomNID], entries[i])
+	}
+
+	for roomNID, roomEntries := range eventToRoomMap {
+		e.Linearizer.Await(roomEntries[0].Event.RoomID(), func() {
+			for i := range roomEntries {
+				err = updateLatestEvents(
+					ctx, e.DB, e.OutputWriter, roomNID,
+					roomEntries[i].StateAtEvent,
+					roomEntries[i].Event.Event,
+					roomEntries[i].SendAsServer,
+					roomEntries[i].TransactionID,
+				)
+				if err != nil {
+					return
+				}
 			}
-		}
-	})
+		})
+	}
 
 	return
 }

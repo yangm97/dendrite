@@ -17,6 +17,7 @@ package types
 
 import (
 	"github.com/matrix-org/dendrite/common"
+	"github.com/matrix-org/dendrite/roomserver/api"
 	"github.com/matrix-org/gomatrixserverlib"
 )
 
@@ -201,3 +202,11 @@ type MembershipUpdater interface {
 type MissingEventError string
 
 func (e MissingEventError) Error() string { return string(e) }
+
+type EventForSending struct {
+	Event         Event
+	RoomNID       RoomNID
+	SendAsServer  string
+	TransactionID *api.TransactionID
+	StateAtEvent  StateAtEvent
+}

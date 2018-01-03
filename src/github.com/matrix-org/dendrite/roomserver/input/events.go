@@ -16,6 +16,7 @@ package input
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/matrix-org/dendrite/common"
@@ -23,6 +24,7 @@ import (
 	"github.com/matrix-org/dendrite/roomserver/state"
 	"github.com/matrix-org/dendrite/roomserver/types"
 	"github.com/matrix-org/gomatrixserverlib"
+	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
 // A RoomEventDatabase has the storage APIs needed to store a room event.
@@ -33,6 +35,7 @@ type RoomEventDatabase interface {
 		ctx context.Context,
 		event gomatrixserverlib.Event,
 		authEventNIDs []types.EventNID,
+		sendAsServer string, transactionID *api.TransactionID,
 	) (types.RoomNID, types.StateAtEvent, error)
 	// Look up the state entries for a list of string event IDs
 	// Returns an error if the there is an error talking to the database
@@ -61,12 +64,34 @@ type RoomEventDatabase interface {
 	MembershipUpdater(
 		ctx context.Context, roomID, targerUserID string,
 	) (types.MembershipUpdater, error)
+	// UnsentEvents gets a list of events that have persisted but haven't yet been
+	// confirmed sent down the kaffka stream. Events should be sent in order.
+	UnsentEvents(ctx context.Context) ([]types.EventForSending, error)
 }
 
 // OutputRoomEventWriter has the APIs needed to write an event to the output logs.
-type OutputRoomEventWriter interface {
-	// Write a list of events for a room
-	WriteOutputEvents(roomID string, updates []api.OutputEvent) error
+type OutputRoomEventWriter struct {
+	Producer sarama.SyncProducer
+	// The kafkaesque topic to output new room events to.
+	// This is the name used in kafka to identify the stream to write events to.
+	OutputRoomEventTopic string
+}
+
+// WriteOutputEvents writes a list of events for a room
+func (r *OutputRoomEventWriter) WriteOutputEvents(roomID string, updates []api.OutputEvent) error {
+	messages := make([]*sarama.ProducerMessage, len(updates))
+	for i := range updates {
+		value, err := json.Marshal(updates[i])
+		if err != nil {
+			return err
+		}
+		messages[i] = &sarama.ProducerMessage{
+			Topic: r.OutputRoomEventTopic,
+			Key:   sarama.StringEncoder(roomID),
+			Value: sarama.ByteEncoder(value),
+		}
+	}
+	return r.Producer.SendMessages(messages)
 }
 
 // processRoomEvent can only be called once at a time
@@ -77,7 +102,7 @@ type OutputRoomEventWriter interface {
 func processRoomEvent(
 	ctx context.Context,
 	db RoomEventDatabase,
-	ow OutputRoomEventWriter,
+	eventSender EventSender,
 	input api.InputRoomEvent,
 ) error {
 	// Parse and validate the event JSON
@@ -90,7 +115,7 @@ func processRoomEvent(
 	}
 
 	// Store the event
-	roomNID, stateAtEvent, err := db.StoreEvent(ctx, event, authEventNIDs)
+	roomNID, stateAtEvent, err := db.StoreEvent(ctx, event, authEventNIDs, input.SendAsServer, input.TransactionID)
 	if err != nil {
 		return err
 	}
@@ -134,7 +159,7 @@ func processRoomEvent(
 	}
 
 	// Update the extremities of the event graph for the room
-	return updateLatestEvents(ctx, db, ow, roomNID, stateAtEvent, event, input.SendAsServer, input.TransactionID)
+	return eventSender.Send(ctx, roomNID, stateAtEvent, event, input.SendAsServer, input.TransactionID)
 }
 
 func processInviteEvent(

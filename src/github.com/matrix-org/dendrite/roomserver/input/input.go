@@ -24,35 +24,14 @@ import (
 	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/roomserver/api"
 	"github.com/matrix-org/util"
-	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
 // RoomserverInputAPI implements api.RoomserverInputAPI
 type RoomserverInputAPI struct {
-	DB       RoomEventDatabase
-	Producer sarama.SyncProducer
-	// The kafkaesque topic to output new room events to.
-	// This is the name used in kafka to identify the stream to write events to.
-	OutputRoomEventTopic string
+	DB          RoomEventDatabase
+	EventSender EventSender
 	// Protects calls to processRoomEvent
 	mutex sync.Mutex
-}
-
-// WriteOutputEvents implements OutputRoomEventWriter
-func (r *RoomserverInputAPI) WriteOutputEvents(roomID string, updates []api.OutputEvent) error {
-	messages := make([]*sarama.ProducerMessage, len(updates))
-	for i := range updates {
-		value, err := json.Marshal(updates[i])
-		if err != nil {
-			return err
-		}
-		messages[i] = &sarama.ProducerMessage{
-			Topic: r.OutputRoomEventTopic,
-			Key:   sarama.StringEncoder(roomID),
-			Value: sarama.ByteEncoder(value),
-		}
-	}
-	return r.Producer.SendMessages(messages)
 }
 
 // InputRoomEvents implements api.RoomserverInputAPI
@@ -65,12 +44,12 @@ func (r *RoomserverInputAPI) InputRoomEvents(
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	for i := range request.InputRoomEvents {
-		if err := processRoomEvent(ctx, r.DB, r, request.InputRoomEvents[i]); err != nil {
+		if err := processRoomEvent(ctx, r.DB, r.EventSender, request.InputRoomEvents[i]); err != nil {
 			return err
 		}
 	}
 	for i := range request.InputInviteEvents {
-		if err := processInviteEvent(ctx, r.DB, r, request.InputInviteEvents[i]); err != nil {
+		if err := processInviteEvent(ctx, r.DB, r.EventSender.OutputWriter, request.InputInviteEvents[i]); err != nil {
 			return err
 		}
 	}

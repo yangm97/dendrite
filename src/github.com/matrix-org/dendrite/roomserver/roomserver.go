@@ -15,8 +15,10 @@
 package roomserver
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/roomserver/api"
 
 	"github.com/matrix-org/dendrite/common/basecomponent"
@@ -39,10 +41,26 @@ func SetupRoomServerComponent(
 		logrus.WithError(err).Panicf("failed to connect to room server db")
 	}
 
-	inputAPI := input.RoomserverInputAPI{
-		DB:                   roomserverDB,
+	outputRoomEventWriter := input.OutputRoomEventWriter{
 		Producer:             base.KafkaProducer,
 		OutputRoomEventTopic: string(base.Cfg.Kafka.Topics.OutputRoomEvent),
+	}
+
+	eventSender := input.EventSender{
+		DB:           roomserverDB,
+		OutputWriter: outputRoomEventWriter,
+		Linearizer:   common.NewLinearizer(),
+	}
+
+	ctx := context.Background()
+	err = eventSender.Start(ctx)
+	if err != nil {
+		logrus.WithError(err).Panicf("failed to handle unsent events")
+	}
+
+	inputAPI := input.RoomserverInputAPI{
+		DB:          roomserverDB,
+		EventSender: eventSender,
 	}
 
 	inputAPI.SetupHTTP(http.DefaultServeMux)
