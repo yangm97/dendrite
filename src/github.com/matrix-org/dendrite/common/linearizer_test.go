@@ -96,7 +96,7 @@ func TestMultipleConcurrentLinearizer(t *testing.T) { // nolint: gocyclo
 			if numThirdCalls != 0 {
 				t.Fatalf("Expected third function to not be called, called %d times", numThirdCalls)
 			}
-		}, setupAwait2)
+		}, func() { close(setupAwait2) })
 
 		t.Log("Finished waiting on w1")
 		waitGroup.Done()
@@ -118,7 +118,7 @@ func TestMultipleConcurrentLinearizer(t *testing.T) { // nolint: gocyclo
 			if numThirdCalls != 0 {
 				t.Fatalf("Expected third function to not be called, called %d times", numThirdCalls)
 			}
-		}, setupAwait3)
+		}, func() { close(setupAwait3) })
 
 		t.Log("Finished waiting on w2")
 
@@ -141,7 +141,7 @@ func TestMultipleConcurrentLinearizer(t *testing.T) { // nolint: gocyclo
 			if numThirdCalls != 1 {
 				t.Fatalf("Expected third function to be called once, called %d times", numThirdCalls)
 			}
-		}, startSignal)
+		}, func() { close(startSignal) })
 
 		t.Log("Finished waiting on w3")
 		waitGroup.Done()

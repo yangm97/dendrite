@@ -17,6 +17,7 @@ package input
 import (
 	"bytes"
 	"context"
+	"sync"
 
 	"github.com/pkg/errors"
 
@@ -68,8 +69,13 @@ func (e *EventSender) Start(ctx context.Context) (err error) {
 		eventToRoomMap[roomNID] = append(eventToRoomMap[roomNID], entries[i])
 	}
 
+	// We only wait until we have registered all the rooms with the linearizer,
+	// as we don't want to block startup on handling them.
+	var wg sync.WaitGroup
+	wg.Add(len(eventToRoomMap))
+
 	for roomNID, roomEntries := range eventToRoomMap {
-		e.Linearizer.Await(roomEntries[0].Event.RoomID(), func() {
+		e.Linearizer.AwaitWithHook(roomEntries[0].Event.RoomID(), func() {
 			for i := range roomEntries {
 				err = updateLatestEvents(
 					ctx, e.DB, e.OutputWriter, roomNID,
@@ -82,8 +88,10 @@ func (e *EventSender) Start(ctx context.Context) (err error) {
 					return
 				}
 			}
-		})
+		}, wg.Done)
 	}
+
+	wg.Wait()
 
 	return
 }

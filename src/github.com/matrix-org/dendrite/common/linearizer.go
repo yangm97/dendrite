@@ -43,14 +43,14 @@ func (l *Linearizer) Await(key string, callback func()) {
 // testing as any functions scheduled after hook has been closed are guaranteed
 // to be run after this callback has finished. If hook is nil then it is
 // ignored.
-func (l *Linearizer) AwaitWithHook(key string, callback func(), hook chan<- struct{}) {
+func (l *Linearizer) AwaitWithHook(key string, callback func(), hook func()) {
 	closeChannel := make(chan struct{})
 	defer close(closeChannel)
 
 	awaitChannel := l.getAndSetLastMutex(key, closeChannel)
 
 	if hook != nil {
-		close(hook)
+		hook()
 	}
 
 	if awaitChannel != nil {
