@@ -7,7 +7,7 @@ version: 0
 # The matrix specific config
 matrix:
     # The name of the server. This is usually the domain name, e.g 'matrix.org', 'localhost'.
-    server_name: "example.com"
+    server_name: "localhost"
     # The path to the PEM formatted matrix private key.
     private_key: "matrix_key.pem"
     # The x509 certificates used by the federation listeners for this server
@@ -81,7 +81,7 @@ kafka:
     # Kafka can be used both with a monolithic server and when running the
     # components as separate servers.
     # If enabled database.naffka must also be specified.
-    use_naffka: true
+    use_naffka: false
     # The names of the kafka topics to use.
     topics:
         output_room_event: roomserverOutput
@@ -99,19 +99,19 @@ database:
     federation_sender: "postgres://dendrite:itsasecret@postgres/dendrite_federationsender?sslmode=disable"
     public_rooms_api: "postgres://dendrite:itsasecret@postgres/dendrite_publicroomsapi?sslmode=disable"
     # If using naffka you need to specify a naffka database
-    naffka: "postgres://dendrite:itsasecret@postgres/dendrite_naffka?sslmode=disable"
+    # naffka: "postgres://dendrite:itsasecret@postgres/dendrite_naffka?sslmode=disable"
 
 # The TCP host:port pairs to bind the internal HTTP APIs to.
 # These shouldn't be exposed to the public internet.
 # These aren't needed when running dendrite as a monolithic server.
 listen:
-    room_server: "room_server:7770"
-    client_api: "client_api:7771"
-    federation_api: "federation_api:7772"
-    sync_api: "sync_api:7773"
-    media_api: "media_api:7774"
-    public_rooms_api: "public_rooms_api:7775"
-    federation_sender: "federation_sender:7776"
+    room_server: "room-server:7770"
+    client_api: "client-api:7771"
+    federation_api: "federation-api:7772"
+    sync_api: "sync-api:7773"
+    media_api: "media-api:7774"
+    public_rooms_api: "public-rooms-api:7775"
+    federation_sender: "federation-sender:7776"
 
 # The configuration for tracing the dendrite components.
 tracing:

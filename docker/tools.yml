@@ -1,0 +1,30 @@
+version: "3.4"
+
+x-common:
+  &common
+  image: matrix-org/dendrite
+  build: .
+  volumes:
+    - ./configs:/data/configs
+    - ./secrets:/data/secrets
+
+services:
+  dendrite:
+    << : *common
+    entrypoint:
+      - /bin/sh
+      - -c
+  keygen:
+    << : *common
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        cd /data/secrets
+        generate-keys -private-key matrix_key.pem
+        apk add --no-cache openssl
+        openssl req -x509 -newkey rsa:4096 \
+          -keyout server.key \
+          -out server.crt \
+          -days 3650 -nodes \
+          -subj /CN=localhost

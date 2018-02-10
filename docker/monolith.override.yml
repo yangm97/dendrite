@@ -1,0 +1,22 @@
+version: "3.4"
+
+services:
+  monolith:
+    restart: always
+    build: .
+    volumes:
+      - ./configs/monolith.yaml:/dendrite.yaml # Because docker-compose ignores configs but not secrets *shrug*
+  postgres:
+    restart: always
+    image: postgres:9.5
+    volumes:
+      - ./docker/postgres/create_db.sh:/docker-entrypoint-initdb.d/20-create_db.sh
+      - pg-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: itsasecret
+      POSTGRES_USER: dendrite
+    ports:
+      - "5432:5432"
+
+volumes:
+  pg-data:

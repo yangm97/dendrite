@@ -1,0 +1,38 @@
+version: "3.4"
+
+services:
+  monolith:
+    image: matrix-org/dendrite
+    command: [
+      "--tls-cert", "server.crt",
+      "--tls-key", "server.key"
+    ]
+    configs:
+      - dendrite.yaml
+    secrets:
+      - source: matrix_key.pem
+        target: /matrix_key.pem
+      - source: server.crt
+        target: /server.crt
+      - source: server.key
+        target: /server.key
+    volumes:
+      - media:/var/dendrite/media
+    ports:
+      - "8008:8008"
+      - "8448:8448"
+
+configs:
+  dendrite.yaml:
+    file: ./configs/monolith.yaml
+
+secrets:
+  matrix_key.pem:
+    file: ./secrets/matrix_key.pem
+  server.crt:
+    file: ./secrets/server.crt
+  server.key:
+    file: ./secrets/server.key
+
+volumes:
+  media:

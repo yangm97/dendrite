@@ -39,3 +39,7 @@ _testmain.go
 *.pem
 *.key
 *.crt
+
+# Compose files
+docker-compose.yml
+docker-compose.override.yml

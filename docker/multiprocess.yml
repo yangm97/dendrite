@@ -1,0 +1,50 @@
+version: "3.4"
+
+x-common:
+  &common
+  image: matrix-org/dendrite
+  configs:
+    - dendrite.yaml
+  secrets:
+    - source: matrix_key.pem
+      target: /matrix_key.pem
+
+services:
+  room-server:
+    << : *common
+    entrypoint: /usr/local/bin/dendrite-room-server
+
+  client-api:
+    << : *common
+    entrypoint: /usr/local/bin/dendrite-client-api-server
+
+  federation-api:
+    << : *common
+    entrypoint: /usr/local/bin/dendrite-federation-api-server
+
+  sync-api:
+    << : *common
+    entrypoint: /usr/local/bin/dendrite-sync-api-server
+
+  media-api:
+    << : *common
+    entrypoint: /usr/local/bin/dendrite-media-api-server
+
+  public-rooms-api:
+    << : *common
+    entrypoint: /usr/local/bin/dendrite-public-rooms-api-server
+
+  federation-sender:
+    << : *common
+    entrypoint: /usr/local/bin/dendrite-federation-sender-server
+
+configs:
+  dendrite.yaml:
+    file: ./configs/multiprocess.yaml
+
+secrets:
+  matrix_key.pem:
+    file: ./secrets/matrix_key.pem
+
+volumes:
+  media:
