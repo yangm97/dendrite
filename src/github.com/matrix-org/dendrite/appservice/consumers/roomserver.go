@@ -175,7 +175,7 @@ func (s *OutputRoomEventConsumer) filterRoomserverEvents(
 	for _, event := range events {
 		for _, ws := range s.workerStates {
 			// Check if this event is interesting to this application service
-			if s.appserviceIsInterestedInEvent(ctx, &event, ws.AppService) {
+			if s.appserviceIsInterestedInEvent(ctx, event, ws.AppService) {
 				// Queue this event to be sent off to the application service
 				if err := s.asDB.StoreEvent(ctx, ws.AppService.ID, &event); err != nil {
 					log.WithError(err).Warn("failed to insert incoming event into appservices database")
@@ -196,19 +196,11 @@ func (s *OutputRoomEventConsumer) filterRoomserverEvents(
 
 // appserviceIsInterestedInEvent returns a boolean depending on whether a given
 // event falls within one of a given application service's namespaces.
-func (s *OutputRoomEventConsumer) appserviceIsInterestedInEvent(ctx context.Context, event *gomatrixserverlib.Event, appservice config.ApplicationService) bool {
-	// Check sender of the event
-	for _, userNamespace := range appservice.NamespaceMap["users"] {
-		if userNamespace.RegexpObject.MatchString(event.Sender()) {
-			return true
-		}
-	}
-
-	// Check room id of the event
-	for _, roomNamespace := range appservice.NamespaceMap["rooms"] {
-		if roomNamespace.RegexpObject.MatchString(event.RoomID()) {
-			return true
-		}
+func (s *OutputRoomEventConsumer) appserviceIsInterestedInEvent(ctx context.Context, event gomatrixserverlib.Event, appservice config.ApplicationService) bool {
+	// Check room_id and sender of the event
+	if appservice.IsInterestedInUserID(event.Sender()) ||
+		appservice.IsInterestedInRoomID(event.RoomID()) {
+		return true
 	}
 
 	// Check all known room aliases of the room the event came from
@@ -216,10 +208,8 @@ func (s *OutputRoomEventConsumer) appserviceIsInterestedInEvent(ctx context.Cont
 	var queryRes api.GetAliasesForRoomIDResponse
 	if err := s.alias.GetAliasesForRoomID(ctx, &queryReq, &queryRes); err == nil {
 		for _, alias := range queryRes.Aliases {
-			for _, aliasNamespace := range appservice.NamespaceMap["aliases"] {
-				if aliasNamespace.RegexpObject.MatchString(alias) {
-					return true
-				}
+			if appservice.IsInterestedInRoomAlias(alias) {
+				return true
 			}
 		}
 	} else {
