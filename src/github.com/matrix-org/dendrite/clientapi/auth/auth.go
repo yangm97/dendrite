@@ -65,12 +65,6 @@ type Data struct {
 func VerifyUserFromRequest(
 	req *http.Request, data Data,
 ) (*authtypes.Device, *util.JSONResponse) {
-	// Try to find local user from device database
-	dev, devErr := verifyAccessToken(req, data.DeviceDB)
-	if devErr == nil {
-		return dev, nil
-	}
-
 	// Try to find the Application Service user
 	token, err := extractAccessToken(req)
 	if err != nil {
@@ -89,8 +83,8 @@ func VerifyUserFromRequest(
 		}
 	}
 
-	if appService != nil {
-		userID := req.URL.Query().Get("user_id")
+	userID := req.URL.Query().Get("user_id")
+	if appService != nil && userID != "" {
 		localpart, err := userutil.ParseUsernameParam(userID, nil)
 		if err != nil {
 			return nil, &util.JSONResponse{
@@ -98,6 +92,7 @@ func VerifyUserFromRequest(
 				JSON: jsonerror.InvalidUsername(err.Error()),
 			}
 		}
+		fmt.Println("APPSERVICE MASQUERADING AS:", localpart)
 
 		// Verify that the user is registered
 		account, err := data.AccountDB.GetAccountByLocalpart(req.Context(), localpart)
@@ -121,6 +116,13 @@ func VerifyUserFromRequest(
 			Code: http.StatusForbidden,
 			JSON: jsonerror.Forbidden("Application service has not registered this user"),
 		}
+	}
+
+	// Try to find local user from device database
+	dev, devErr := verifyAccessToken(req, data.DeviceDB)
+	if devErr == nil {
+		fmt.Println("Found local device:", dev)
+		return dev, nil
 	}
 
 	return nil, &util.JSONResponse{

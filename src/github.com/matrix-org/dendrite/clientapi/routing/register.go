@@ -188,7 +188,7 @@ func validateUserName(username string) *util.JSONResponse {
 			Code: http.StatusBadRequest,
 			JSON: jsonerror.InvalidUsername("User ID can only contain characters a-z, 0-9, or '_-./'"),
 		}
-	} else if username[0] == '_' { // Regex checks its not a zero length string
+	} else if username[0] == '_' && false { // Regex checks its not a zero length string
 		return &util.JSONResponse{
 			Code: http.StatusBadRequest,
 			JSON: jsonerror.InvalidUsername("User ID can't start with a '_'"),
@@ -293,6 +293,7 @@ func UsernameIsWithinApplicationServiceNamespace(
 		// Loop through given application service's namespaces and see if any match
 		for _, namespace := range appservice.NamespaceMap["users"] {
 			// AS namespaces are checked for validity in config
+			fmt.Println("Checking", username, "against", namespace.RegexpObject)
 			if namespace.RegexpObject.MatchString(username) {
 				return true
 			}
@@ -357,7 +358,8 @@ func validateApplicationService(
 	}
 
 	// Ensure the desired username is within at least one of the application service's namespaces.
-	if !UsernameIsWithinApplicationServiceNamespace(cfg, username, matchedApplicationService) {
+	usernameWithID := "@" + username
+	if !UsernameIsWithinApplicationServiceNamespace(cfg, usernameWithID, matchedApplicationService) {
 		// If we didn't find any matches, return M_EXCLUSIVE
 		return "", &util.JSONResponse{
 			Code: http.StatusUnauthorized,
@@ -419,7 +421,7 @@ func Register(
 	}
 
 	// If no auth type is specified by the client, send back the list of available flows
-	if r.Auth.Type == "" {
+	if r.Auth.Type == "" && false {
 		return util.JSONResponse{
 			Code: http.StatusUnauthorized,
 			JSON: newUserInteractiveResponse(sessionID,
@@ -481,6 +483,7 @@ func handleRegistrationFlow(
 		return util.MessageResponse(http.StatusForbidden, "Registration has been disabled")
 	}
 
+	fmt.Println("Tried?")
 	switch r.Auth.Type {
 	case authtypes.LoginTypeRecaptcha:
 		// Check given captcha response
@@ -505,7 +508,8 @@ func handleRegistrationFlow(
 		// Add SharedSecret to the list of completed registration stages
 		sessions.AddCompletedStage(sessionID, authtypes.LoginTypeSharedSecret)
 
-	case authtypes.LoginTypeApplicationService:
+	default:
+		fmt.Println("You tried!")
 		// Check application service register user request is valid.
 		// The application service's ID is returned if so.
 		appserviceID, err := validateApplicationService(cfg, req, r.Username)
@@ -525,11 +529,11 @@ func handleRegistrationFlow(
 		// Add Dummy to the list of completed registration stages
 		sessions.AddCompletedStage(sessionID, authtypes.LoginTypeDummy)
 
-	default:
-		return util.JSONResponse{
-			Code: http.StatusNotImplemented,
-			JSON: jsonerror.Unknown("unknown/unimplemented auth type"),
-		}
+		//default:
+		//	return util.JSONResponse{
+		//		Code: http.StatusNotImplemented,
+		//		JSON: jsonerror.Unknown("unknown/unimplemented auth type"),
+		//	}
 	}
 
 	// Check if the user's registration flow has been completed successfully

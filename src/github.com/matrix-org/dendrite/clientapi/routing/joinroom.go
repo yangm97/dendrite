@@ -103,6 +103,7 @@ func (r joinRoomReq) joinRoomByID(roomID string) util.JSONResponse {
 	queryReq := api.QueryInvitesForUserRequest{
 		RoomID: roomID, TargetUserID: r.userID,
 	}
+	fmt.Println(queryReq)
 	var queryRes api.QueryInvitesForUserResponse
 	if err := r.queryAPI.QueryInvitesForUser(r.req.Context(), &queryReq, &queryRes); err != nil {
 		return httputil.LogThenError(r.req, err)

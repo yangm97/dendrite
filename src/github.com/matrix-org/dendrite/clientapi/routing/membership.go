@@ -17,6 +17,7 @@ package routing
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/matrix-org/dendrite/clientapi/auth/authtypes"
@@ -164,6 +165,7 @@ func loadProfile(
 	}
 
 	var profile *authtypes.Profile
+	fmt.Println("Getting by localpart:", localpart)
 	if serverName == cfg.Matrix.ServerName {
 		profile, err = accountDB.GetProfileByLocalpart(ctx, localpart)
 	} else {
