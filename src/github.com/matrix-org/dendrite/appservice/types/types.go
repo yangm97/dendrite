@@ -12,6 +12,25 @@
 
 package types
 
+import (
+	"sync"
+
+	"github.com/matrix-org/dendrite/common/config"
+)
+
+// ApplicationServiceWorkerState is a type that couples an application service,
+// a lockable condition as well as some other state variables, allowing the
+// roomserver to notify appservice workers when there are events ready to send
+// externally to application services.
+type ApplicationServiceWorkerState struct {
+	AppService config.ApplicationService
+	Cond       *sync.Cond
+	// Events ready to be sent
+	EventsReady *int
+	// Backoff exponent (2^x secs). Max 6, aka 64s.
+	Backoff int
+}
+
 const (
 	// AppServiceDeviceID is the AS dummy device ID
 	AppServiceDeviceID = "AS_Device"

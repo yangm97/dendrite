@@ -17,8 +17,9 @@ package consumers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
+	"github.com/matrix-org/dendrite/appservice/storage"
+	"github.com/matrix-org/dendrite/appservice/types"
 	"github.com/matrix-org/dendrite/clientapi/auth/storage/accounts"
 	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/common/config"
@@ -29,29 +30,28 @@ import (
 	sarama "gopkg.in/Shopify/sarama.v1"
 )
 
-var (
-	appServices []config.ApplicationService
-)
-
 // OutputRoomEventConsumer consumes events that originated in the room server.
 type OutputRoomEventConsumer struct {
 	roomServerConsumer *common.ContinualConsumer
 	db                 *accounts.Database
+	asDB               *storage.Database
 	query              api.RoomserverQueryAPI
 	alias              api.RoomserverAliasAPI
 	serverName         string
+	workerStates       []types.ApplicationServiceWorkerState
 }
 
-// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer. Call Start() to begin consuming from room servers.
+// NewOutputRoomEventConsumer creates a new OutputRoomEventConsumer. Call
+// Start() to begin consuming from room servers.
 func NewOutputRoomEventConsumer(
 	cfg *config.Dendrite,
 	kafkaConsumer sarama.Consumer,
 	store *accounts.Database,
+	appserviceDB *storage.Database,
 	queryAPI api.RoomserverQueryAPI,
 	aliasAPI api.RoomserverAliasAPI,
+	workerStates []types.ApplicationServiceWorkerState,
 ) *OutputRoomEventConsumer {
-	appServices = cfg.Derived.ApplicationServices
-
 	consumer := common.ContinualConsumer{
 		Topic:          string(cfg.Kafka.Topics.OutputRoomEvent),
 		Consumer:       kafkaConsumer,
@@ -60,9 +60,11 @@ func NewOutputRoomEventConsumer(
 	s := &OutputRoomEventConsumer{
 		roomServerConsumer: &consumer,
 		db:                 store,
+		asDB:               appserviceDB,
 		query:              queryAPI,
 		alias:              aliasAPI,
 		serverName:         string(cfg.Matrix.ServerName),
+		workerStates:       workerStates,
 	}
 	consumer.ProcessMessage = s.onMessage
 
@@ -74,9 +76,10 @@ func (s *OutputRoomEventConsumer) Start() error {
 	return s.roomServerConsumer.Start()
 }
 
-// onMessage is called when the sync server receives a new event from the room server output log.
-// It is not safe for this function to be called from multiple goroutines, or else the
-// sync stream position may race and be incorrectly calculated.
+// onMessage is called when the sync server receives a new event from the room
+// server output log. It is not safe for this function to be called from
+// multiple goroutines, or else the sync stream position may race and be
+// incorrectly calculated.
 func (s *OutputRoomEventConsumer) onMessage(msg *sarama.ConsumerMessage) error {
 	// Parse out the event JSON
 	var output api.OutputEvent
@@ -165,13 +168,25 @@ func (s *OutputRoomEventConsumer) lookupStateEvents(
 // each namespace of each registered application service, and if there is a
 // match, adds the event to the queue for events to be sent to a particular
 // application service.
-func (s *OutputRoomEventConsumer) filterRoomserverEvents(ctx context.Context, events []gomatrixserverlib.Event) error {
+func (s *OutputRoomEventConsumer) filterRoomserverEvents(
+	ctx context.Context,
+	events []gomatrixserverlib.Event,
+) error {
 	for _, event := range events {
-		for _, appservice := range appServices {
+		for _, ws := range s.workerStates {
 			// Check if this event is interesting to this application service
-			if s.appserviceIsInterestedInEvent(ctx, event, appservice) {
-				// TODO: Queue this event to be sent off to the application service
-				fmt.Println(appservice.ID, "was interested in", event.Sender(), event.Type(), event.RoomID())
+			if s.appserviceIsInterestedInEvent(ctx, &event, ws.AppService) {
+				// Queue this event to be sent off to the application service
+				if err := s.asDB.StoreEvent(ctx, ws.AppService.ID, &event); err != nil {
+					log.WithError(err).Warn("failed to insert incoming event into appservices database")
+				} else {
+					// Tell our worker to send out new messages by updating remaining message
+					// count and waking them up with a broadcast
+					ws.Cond.L.Lock()
+					*ws.EventsReady++
+					ws.Cond.Broadcast()
+					ws.Cond.L.Unlock()
+				}
 			}
 		}
 	}
@@ -181,7 +196,7 @@ func (s *OutputRoomEventConsumer) filterRoomserverEvents(ctx context.Context, ev
 
 // appserviceIsInterestedInEvent returns a boolean depending on whether a given
 // event falls within one of a given application service's namespaces.
-func (s *OutputRoomEventConsumer) appserviceIsInterestedInEvent(ctx context.Context, event gomatrixserverlib.Event, appservice config.ApplicationService) bool {
+func (s *OutputRoomEventConsumer) appserviceIsInterestedInEvent(ctx context.Context, event *gomatrixserverlib.Event, appservice config.ApplicationService) bool {
 	// Check sender of the event
 	for _, userNamespace := range appservice.NamespaceMap["users"] {
 		if userNamespace.RegexpObject.MatchString(event.Sender()) {
