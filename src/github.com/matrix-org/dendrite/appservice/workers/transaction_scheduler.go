@@ -217,8 +217,14 @@ func send(
 	transaction []byte,
 ) error {
 	// POST a transaction to our AS
-	address := fmt.Sprintf("%s/transactions/%d", appservice.URL, txnID)
-	resp, err := client.Post(address, "application/json", bytes.NewBuffer(transaction))
+	address := fmt.Sprintf("%s/transactions/%d?access_token=%s", appservice.URL, txnID, appservice.HSToken)
+	req, err := http.NewRequest(http.MethodPut, address, bytes.NewBuffer(transaction))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

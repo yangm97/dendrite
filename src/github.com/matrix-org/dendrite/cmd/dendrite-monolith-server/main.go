@@ -56,7 +56,7 @@ func main() {
 
 	alias, input, query := roomserver.SetupRoomServerComponent(base)
 	asQuery := appservice.SetupAppServiceAPIComponent(
-		base, accountDB, federation, alias, query, transactions.New(),
+		base, accountDB, deviceDB, federation, alias, query, transactions.New(),
 	)
 
 	clientapi.SetupClientAPIComponent(
