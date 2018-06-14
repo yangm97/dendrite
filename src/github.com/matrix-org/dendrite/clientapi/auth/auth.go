@@ -83,9 +83,12 @@ func VerifyUserFromRequest(
 		}
 	}
 
-	userID := req.URL.Query().Get("user_id")
-	if appService != nil && userID != "" {
+	if appService != nil {
+		userID := req.URL.Query().Get("user_id")
 		localpart, err := userutil.ParseUsernameParam(userID, nil)
+		if userID == "" {
+			localpart = appService.SenderLocalpart
+		}
 		if err != nil {
 			return nil, &util.JSONResponse{
 				Code: http.StatusBadRequest,

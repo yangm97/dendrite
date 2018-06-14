@@ -141,3 +141,27 @@ func generateAppServiceAccount(
 
 	return nil
 }
+
+// generateAppServiceAccounts creates a dummy account based off the
+// `sender_localpart` field of each application service if it doesn't
+// exist already
+func generateAppServiceAccount(
+	accountsDB *accounts.Database,
+	deviceDB *devices.Database,
+	as config.ApplicationService,
+) error {
+	ctx := context.Background()
+
+	// Create an account for the application service
+	acc, err := accountsDB.CreateAccount(ctx, as.SenderLocalpart, "", as.ID)
+	if err != nil {
+		return err
+	} else if acc == nil {
+		// This account already exists
+		return nil
+	}
+
+	// Create a dummy device with a dummy token for the application service
+	_, err = deviceDB.CreateDevice(ctx, as.SenderLocalpart, nil, as.ASToken, &as.SenderLocalpart)
+	return err
+}
