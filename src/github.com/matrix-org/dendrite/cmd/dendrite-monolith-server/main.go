@@ -21,6 +21,7 @@ import (
 	"github.com/matrix-org/dendrite/common/keydb"
 	"github.com/matrix-org/dendrite/common/transactions"
 
+	"github.com/matrix-org/dendrite/appservice"
 	"github.com/matrix-org/dendrite/clientapi"
 	"github.com/matrix-org/dendrite/common"
 	"github.com/matrix-org/dendrite/common/basecomponent"
@@ -65,10 +66,7 @@ func main() {
 	mediaapi.SetupMediaAPIComponent(base, deviceDB)
 	publicroomsapi.SetupPublicRoomsAPIComponent(base, deviceDB)
 	syncapi.SetupSyncAPIComponent(base, deviceDB, accountDB, query)
-<<<<<<< HEAD
-=======
 	appservice.SetupAppServiceAPIComponent(base, accountDB, deviceDB, federation, alias, query, transactions.New())
->>>>>>> c65838c9... Generate sender_localpart user for each AS on startup
 
 	httpHandler := common.WrapHandlerInCORS(base.APIMux)
 
