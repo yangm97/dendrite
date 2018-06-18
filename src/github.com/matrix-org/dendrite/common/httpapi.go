@@ -6,6 +6,7 @@ import (
 
 	"github.com/matrix-org/dendrite/clientapi/auth"
 	"github.com/matrix-org/dendrite/clientapi/auth/authtypes"
+	"github.com/matrix-org/dendrite/common/config"
 	"github.com/matrix-org/gomatrixserverlib"
 	"github.com/matrix-org/util"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -15,11 +16,11 @@ import (
 
 // MakeAuthAPI turns a util.JSONRequestHandler function into an http.Handler which authenticates the request.
 func MakeAuthAPI(
-	metricsName string, data auth.Data,
+	metricsName string, data auth.Data, cfg *config.Dendrite,
 	f func(*http.Request, *authtypes.Device) util.JSONResponse,
 ) http.Handler {
 	h := func(req *http.Request) util.JSONResponse {
-		device, err := auth.VerifyUserFromRequest(req, data)
+		device, err := auth.VerifyUserFromRequest(req, data, cfg)
 		if err != nil {
 			return *err
 		}

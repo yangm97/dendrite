@@ -33,5 +33,5 @@ func SetupPublicRoomsAPIComponent(
 		logrus.WithError(err).Panicf("failed to connect to public rooms db")
 	}
 
-	routing.Setup(base.APIMux, deviceDB, publicRoomsDB)
+	routing.Setup(base.Cfg, base.APIMux, deviceDB, publicRoomsDB)
 }

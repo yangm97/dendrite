@@ -63,7 +63,7 @@ type Data struct {
 // Note: For an AS user, AS dummy device is returned.
 // On failure returns an JSON error response which can be sent to the client.
 func VerifyUserFromRequest(
-	req *http.Request, data Data,
+	req *http.Request, data Data, cfg *config.Dendrite,
 ) (*authtypes.Device, *util.JSONResponse) {
 	// Try to find the Application Service user
 	token, err := extractAccessToken(req)
@@ -107,7 +107,7 @@ func VerifyUserFromRequest(
 				// Use AS dummy device ID
 				ID: types.AppServiceDeviceID,
 				// User the AS is masquerading as.
-				UserID: userID,
+				UserID: "@" + localpart + ":" + string(cfg.Matrix.ServerName),
 				// AS dummy device has AS's token.
 				AccessToken: token,
 			}
